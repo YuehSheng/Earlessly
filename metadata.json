@@ -1,0 +1,7 @@
+{
+  "name": "耳孔無有力",
+  "description": "一個包含調音器、可編程節拍器與聽力訓練的音樂工具應用。",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
