@@ -181,6 +181,7 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
   const prevStepRef = useRef(-1);
+  const lastSpeedIncreaseRef = useRef<number>(-1);
 
   useEffect(() => {
     engineRef.current = new MetronomeEngine((step) => setCurrentStepIndex(step));
@@ -196,15 +197,15 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
     if (wasZero || currentStepIndex !== 0) return;
     if (!isPlaying || !trainerSettings.enabled) return;
 
-    setTrainerSettings(prev => {
-      const nextCount = prev.currentBarTracker + 1;
-      if (nextCount > prev.barCount) {
-        setBpm(current => Math.min(300, current + prev.increment));
-        return { ...prev, currentBarTracker: 1 };
-      }
-      return { ...prev, currentBarTracker: nextCount };
-    });
-  }, [currentStepIndex, isPlaying, trainerSettings.enabled]);
+    const nextCount = trainerSettings.currentBarTracker + 1;
+    if (nextCount > trainerSettings.barCount) {
+      setBpm(current => Math.min(300, current + trainerSettings.increment));
+      lastSpeedIncreaseRef.current = nextCount;
+      setTrainerSettings(prev => ({ ...prev, currentBarTracker: 1 }));
+    } else {
+      setTrainerSettings(prev => ({ ...prev, currentBarTracker: nextCount }));
+    }
+  }, [currentStepIndex, isPlaying, trainerSettings.enabled, trainerSettings.currentBarTracker, trainerSettings.barCount, trainerSettings.increment]);
 
   useEffect(() => {
     if (mode === 'STANDARD') {

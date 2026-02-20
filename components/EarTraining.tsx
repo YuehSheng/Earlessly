@@ -4,12 +4,15 @@ import { Settings, Play, Music, CheckCircle, XCircle, ArrowRight, Volume2, Ancho
 import { NoteName, ChordQuality, IntervalQuality, Question } from '../types';
 import { generateQuestion, playNotes, NOTE_STRINGS, getAudioContext, autoCorrelate } from '../utils/audioEngine';
 import FrequencyTraining from './FrequencyTraining';
+import RhythmTraining from './RhythmTraining';
+import ProgressionTraining from './ProgressionTraining';
+import ScaleTraining from './ScaleTraining';
 
 interface EarTrainingProps { volume?: number; }
 
 const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const [mode, setMode] = useState<'settings' | 'game'>('settings');
-  const [gameMode, setGameMode] = useState<'note' | 'chord' | 'interval' | 'vocal' | 'frequency'>('note');
+  const [gameMode, setGameMode] = useState<'note' | 'chord' | 'interval' | 'vocal' | 'frequency' | 'rhythm' | 'progression' | 'scale'>('note');
   const [selectedNotes, setSelectedNotes] = useState<NoteName[]>(NOTE_STRINGS);
   const [octaveRange, setOctaveRange] = useState<[number, number]>([3, 5]);
   const [polyphony, setPolyphony] = useState(1);
@@ -36,6 +39,14 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   useEffect(() => {
     return () => { stopListening(); if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current); };
   }, []);
+
+  // Clean up audio when gameMode changes in settings
+  useEffect(() => {
+    if (mode === 'settings') {
+      if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
+      stopListening();
+    }
+  }, [gameMode]);
 
   useEffect(() => {
     if (mode === 'game' && currentQuestion && !feedback) {
@@ -120,13 +131,13 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
         const isCorrect = currentQuestion.answerNames.includes(answer);
         setUserSelection([answer]);
         if (isCorrect) { setFeedback('correct'); setScore(s => ({ correct: s.correct + 1, total: s.total + 1 })); autoAdvanceTimer.current = window.setTimeout(() => nextQuestion(), 1000); }
-        else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); }
+        else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); setTimeout(() => playNotes(currentQuestion.notes, playbackSpeed), 400); }
       } else setUserSelection(prev => prev.includes(answer) ? prev.filter(a => a !== answer) : (prev.length < polyphony ? [...prev, answer] : prev));
     } else {
       const isCorrect = currentQuestion.answerNames.includes(answer);
       setUserSelection([answer]);
       if (isCorrect) { setFeedback('correct'); setScore(s => ({ correct: s.correct + 1, total: s.total + 1 })); autoAdvanceTimer.current = window.setTimeout(() => nextQuestion(), 1500); }
-      else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); }
+      else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); setTimeout(() => playNotes(currentQuestion.notes, playbackSpeed), 400); }
     }
   };
 
@@ -135,7 +146,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
     const correct = currentQuestion.answerNames;
     const isCorrect = userSelection.length === correct.length && userSelection.every(val => correct.includes(val));
     if (isCorrect) { setFeedback('correct'); setScore(s => ({ correct: s.correct + 1, total: s.total + 1 })); autoAdvanceTimer.current = window.setTimeout(() => nextQuestion(), 1500); }
-    else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); }
+    else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); setTimeout(() => playNotes(currentQuestion.notes, playbackSpeed), 400); }
   };
 
   // ========== SETTINGS PAGE ==========
@@ -152,8 +163,8 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
           <div className="card p-4 sm:p-6 space-y-4">
             <h3 className="font-bold text-tx text-sm flex items-center gap-2">1. 模式</h3>
             <div className="flex flex-wrap gap-1.5 p-1 card-inner">
-              {(['note', 'interval', 'chord', 'vocal', 'frequency'] as const).map(m => {
-                const labels: Record<string, string> = { note: '聽音', interval: '音程', chord: '和弦', vocal: '視唱', frequency: '頻率 EQ' };
+              {(['note', 'interval', 'chord', 'vocal', 'frequency', 'rhythm', 'progression', 'scale'] as const).map(m => {
+                const labels: Record<string, string> = { note: '聽音', interval: '音程', chord: '和弦', vocal: '視唱', frequency: '頻率 EQ', rhythm: '節奏', progression: '進行', scale: '音階' };
                 return (
                   <button key={m} onClick={() => setGameMode(m)} className={`flex-1 py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${gameMode === m ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={gameMode === m ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
                     {labels[m]}
@@ -203,7 +214,33 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                 </p>
               </div>
             )}
-            {(gameMode !== 'interval' && gameMode !== 'chord' && gameMode !== 'frequency') && (
+            {gameMode === 'rhythm' && (
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>節奏訓練</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
+                  支援兩種模式：「拍打」模式用 TAP 按鈕或空白鍵重現節奏；「聽寫」模式用音符元件拼組出你聽到的節奏型態。
+                </p>
+              </div>
+            )}
+            {gameMode === 'progression' && (
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>和弦進行辨識</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
+                  聆聽一段和弦進行，從選項中辨識出正確的和弦級數進行。
+                  涵蓋流行、古典、爵士等常見進行模式。
+                </p>
+              </div>
+            )}
+            {gameMode === 'scale' && (
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>音階 / 調式辨識</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
+                  聆聽一段音階，辨識它屬於哪種音階或調式。
+                  支援大小調、教會調式、五聲音階、藍調音階等 12 種。
+                </p>
+              </div>
+            )}
+            {(gameMode !== 'interval' && gameMode !== 'chord' && gameMode !== 'frequency' && gameMode !== 'rhythm' && gameMode !== 'progression' && gameMode !== 'scale') && (
               <div className="space-y-2 animate-fade-in">
                 <label className="label">可用音符</label>
                 <div className="grid grid-cols-4 gap-1.5">
@@ -251,10 +288,11 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
     );
   }
 
-  // ========== FREQUENCY MODE ==========
-  if (gameMode === 'frequency') {
-    return <FrequencyTraining onBack={() => setMode('settings')} volume={volume} />;
-  }
+  // ========== DELEGATE MODES ==========
+  if (gameMode === 'frequency') return <FrequencyTraining onBack={() => setMode('settings')} volume={volume} />;
+  if (gameMode === 'rhythm') return <RhythmTraining onBack={() => setMode('settings')} volume={volume} />;
+  if (gameMode === 'progression') return <ProgressionTraining onBack={() => setMode('settings')} volume={volume} />;
+  if (gameMode === 'scale') return <ScaleTraining onBack={() => setMode('settings')} volume={volume} />;
 
   // ========== GAME PAGE ==========
   return (
@@ -367,9 +405,16 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
         <div className="flex flex-col items-center gap-4 w-full">
           <div className="h-8 flex items-center justify-center w-full">
             {feedback ? (
-              <div className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold animate-bounce-in ${feedback === 'correct' ? 'text-success' : 'text-danger'}`} style={{ background: feedback === 'correct' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: feedback === 'correct' ? '1px solid rgba(16,185,129,0.25)' : '1px solid rgba(239,68,68,0.25)' }}>
-                {feedback === 'correct' ? <CheckCircle size={15}/> : <XCircle size={15}/>}
-                <span>{currentQuestion?.answerLabel}</span>
+              <div className="flex items-center gap-2 animate-bounce-in">
+                <div className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold ${feedback === 'correct' ? 'text-success' : 'text-danger'}`} style={{ background: feedback === 'correct' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: feedback === 'correct' ? '1px solid rgba(16,185,129,0.25)' : '1px solid rgba(239,68,68,0.25)' }}>
+                  {feedback === 'correct' ? <CheckCircle size={15}/> : <XCircle size={15}/>}
+                  <span>{currentQuestion?.answerLabel}</span>
+                </div>
+                {feedback === 'incorrect' && currentQuestion && (
+                  <button onClick={() => playNotes(currentQuestion.notes, playbackSpeed)} className="px-3 py-2 rounded-full text-[10px] font-bold cursor-pointer transition-all hover:opacity-80" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)', color: 'var(--primary-sub)' }}>
+                    <Volume2 size={13} />
+                  </button>
+                )}
               </div>
             ) : (
               <div className="label px-5 py-2 rounded-full" style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>

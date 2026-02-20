@@ -334,6 +334,101 @@ export const playNotes = (midiNotes: number[], duration: number = 1.0, type: 'si
   });
 };
 
+export const playScale = (rootMidi: number, intervals: number[], speed: number = 1.0, direction: 'up' | 'down' | 'updown' = 'up') => {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  const now = ctx.currentTime;
+  const gap = 0.25 * speed;
+
+  let sequence = intervals.map(i => rootMidi + i);
+  if (direction === 'down') sequence = [...sequence].reverse();
+  else if (direction === 'updown') sequence = [...sequence, ...[...sequence].reverse().slice(1)];
+
+  sequence.forEach((midi, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const t = now + index * gap;
+    osc.start(t);
+    osc.stop(t + gap + 0.05);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.2, t + 0.03);
+    gain.gain.setTargetAtTime(0.0001, t + 0.03, gap * 0.4);
+  });
+};
+
+export const playChordProgression = (chords: number[][], rootMidi: number, bpm: number = 90) => {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  const now = ctx.currentTime;
+  const chordDur = 60 / bpm;
+
+  chords.forEach((chord, ci) => {
+    const t = now + ci * chordDur;
+    chord.forEach(semitone => {
+      const midi = rootMidi + semitone;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + chordDur + 0.05);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.03);
+      gain.gain.setTargetAtTime(0.0001, t + 0.03, chordDur * 0.35);
+    });
+  });
+};
+
+export const playRhythmClick = (beats: number[], bpm: number, countIn: number = 4): Promise<void> => {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  const now = ctx.currentTime;
+  const beatDur = 60 / bpm;
+  const barDur = 4 * beatDur;
+
+  // Count-in clicks
+  for (let i = 0; i < countIn; i++) {
+    const t = now + i * beatDur;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = i === 0 ? 1500 : 800;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(i === 0 ? 0.5 : 0.3, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    osc.start(t);
+    osc.stop(t + 0.07);
+  }
+
+  const patternStart = now + countIn * beatDur;
+  // Rhythm pattern clicks
+  beats.forEach(pos => {
+    const t = patternStart + pos * barDur;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = 1200;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.4, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    osc.start(t);
+    osc.stop(t + 0.09);
+  });
+
+  const totalDur = (countIn * beatDur + barDur) * 1000;
+  return new Promise(resolve => setTimeout(resolve, totalDur));
+};
+
 export const generateQuestion = (settings: EarTrainingSettings): Question => {
   const candidates: number[] = [];
   const minMidi = (settings.octaveRange[0] + 1) * 12;

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Settings, Play, CheckCircle, Headphones, SkipForward, Sliders } from 'lucide-react';
+import { Settings, Play, CheckCircle, Headphones, SkipForward, Sliders, Upload, X, Music } from 'lucide-react';
 import { getAudioContext } from '../utils/audioEngine';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -120,6 +120,45 @@ function makePinkNoise(ctx: AudioContext): AudioBuffer {
   return buf;
 }
 
+// ── IndexedDB helpers (custom audio persistence) ─────────────────────────
+
+const DB_NAME = 'earlessly-freq';
+const DB_STORE = 'audio';
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveAudioToDB(arrayBuf: ArrayBuffer, name: string) {
+  const db = await openDB();
+  const tx = db.transaction(DB_STORE, 'readwrite');
+  tx.objectStore(DB_STORE).put({ buffer: arrayBuf, name }, 'custom');
+  db.close();
+}
+
+async function loadAudioFromDB(): Promise<{ buffer: ArrayBuffer; name: string } | null> {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const req = tx.objectStore(DB_STORE).get('custom');
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => resolve(null);
+    db.close();
+  });
+}
+
+async function clearAudioFromDB() {
+  const db = await openDB();
+  const tx = db.transaction(DB_STORE, 'readwrite');
+  tx.objectStore(DB_STORE).delete('custom');
+  db.close();
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
@@ -133,11 +172,49 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
   const [dragId, setDragId] = useState<number | null>(null);
   const [hoverId, setHoverId] = useState<number | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [customAudioName, setCustomAudioName] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const srcRef = useRef<AudioBufferSourceNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customBufferRef = useRef<AudioBuffer | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load persisted custom audio on mount
+  useEffect(() => {
+    loadAudioFromDB().then(async (data) => {
+      if (!data) return;
+      try {
+        const ctx = getAudioContext();
+        const decoded = await ctx.decodeAudioData(data.buffer.slice(0));
+        customBufferRef.current = decoded;
+        setCustomAudioName(data.name);
+      } catch { /* ignore corrupt data */ }
+    });
+  }, []);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      const ctx = getAudioContext();
+      const decoded = await ctx.decodeAudioData(arrayBuf.slice(0));
+      customBufferRef.current = decoded;
+      setCustomAudioName(file.name);
+      await saveAudioToDB(arrayBuf, file.name);
+    } catch {
+      alert('無法解碼此音頻檔案，請嘗試 MP3 或 WAV 格式。');
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  const clearCustomAudio = useCallback(async () => {
+    customBufferRef.current = null;
+    setCustomAudioName(null);
+    await clearAudioFromDB();
+  }, []);
 
   const stopAudio = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
@@ -153,7 +230,7 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
     ctx.resume().catch(() => { });
 
     const src = ctx.createBufferSource();
-    src.buffer = makePinkNoise(ctx);
+    src.buffer = customBufferRef.current ?? makePinkNoise(ctx);
     src.loop = true;
 
     let node: AudioNode = src;
@@ -229,15 +306,22 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (dragId === null) return;
-    const pt = plotPt(e); if (!pt) return;
-    const nx = Math.max(0.01, Math.min(0.99, pt.x / PW));
-    const ny = Math.max(0, Math.min(1, pt.y / PH));
+    const pt = plotPt(e);
+    if (!pt) return;
+    // 允許稍微超出邊界，但仍然限制在合理範圍內（-10% 到 110%）
+    const nx = Math.max(-0.1, Math.min(1.1, pt.x / PW));
+    const ny = Math.max(-0.1, Math.min(1.1, pt.y / PH));
     setUser(prev => prev.map(b =>
       b.id === dragId ? { ...b, frequency: nxFreq(nx), gain: nyGain(ny) } : b
     ));
   }, [dragId, plotPt]);
 
-  const onUp = useCallback(() => setDragId(null), []);
+  const onUp = useCallback((e?: React.PointerEvent<SVGSVGElement>) => {
+    if (e && dragId !== null) {
+      e.currentTarget?.releasePointerCapture(e.pointerId);
+    }
+    setDragId(null);
+  }, [dragId]);
 
   // ── Memoized Paths ──────────────────────────────────────────────────────
 
@@ -294,6 +378,24 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               </button>
             ))}
           </div>
+
+          {/* Custom audio upload */}
+          <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileUpload} />
+          {customAudioName ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold"
+              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', color: '#10b981' }}>
+              <Music size={12} />
+              <span className="max-w-20 truncate">{customAudioName}</span>
+              <button onClick={clearCustomAudio} className="ml-0.5 hover:opacity-70 cursor-pointer"><X size={12} /></button>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-all hover:opacity-80"
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' }}>
+              <Upload size={12} /> 上傳音頻
+            </button>
+          )}
 
           {/* Session score */}
           {total > 0 && (
@@ -377,11 +479,14 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
             background: '#080810',
             touchAction: 'none',
             cursor: dragId !== null ? 'grabbing' : phase === 'answering' ? 'crosshair' : 'default',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
           }}
           onPointerDown={onDown}
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerLeave={onUp}
+          onPointerCancel={onUp}
         >
           <defs>
             <linearGradient id="ftUG" x1="0" y1="0" x2="0" y2="1">
