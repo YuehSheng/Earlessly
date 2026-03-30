@@ -152,17 +152,17 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   // ========== SETTINGS PAGE ==========
   if (mode === 'settings') {
     return (
-      <div className="max-w-xl mx-auto p-4 sm:p-6 space-y-5 overflow-y-auto animate-slide-up">
+      <div className="max-w-xl lg:max-w-4xl mx-auto p-4 sm:p-6 space-y-5 overflow-y-auto animate-slide-up">
         <div className="text-center space-y-1">
           <h2 className="text-2xl sm:text-3xl font-extrabold gradient-text">練習設定</h2>
           <p className="text-tx-muted text-xs sm:text-sm">自訂你的聽力訓練內容</p>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row gap-4">
           {/* Mode Card */}
-          <div className="card p-4 sm:p-6 space-y-4">
+          <div className="card p-4 sm:p-6 space-y-4 lg:flex-1">
             <h3 className="font-bold text-tx text-sm flex items-center gap-2">1. 模式</h3>
-            <div className="flex flex-wrap gap-1.5 p-1 card-inner">
+            <div className="flex flex-wrap gap-1.5 p-1 card-inner lg:grid lg:grid-cols-4">
               {(['note', 'interval', 'chord', 'vocal', 'frequency', 'rhythm', 'progression', 'scale'] as const).map(m => {
                 const labels: Record<string, string> = { note: '聽音', interval: '音程', chord: '和弦', vocal: '視唱', frequency: '頻率 EQ', rhythm: '節奏', progression: '進行', scale: '音階' };
                 return (
@@ -203,10 +203,10 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
           </div>
 
           {/* Content Card */}
-          <div className="card p-4 sm:p-6 space-y-4">
+          <div className="card p-4 sm:p-6 space-y-4 lg:flex-1">
             <h3 className="font-bold text-tx text-sm flex items-center gap-2">2. 內容</h3>
             {gameMode === 'frequency' && (
-              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.2)' }}>
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.2)' }}>
                 <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>頻率 EQ 訓練</p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
                   系統播放經過 EQ 調整的粉紅雜訊，你需要拖曳頻譜圖上的控制點，
@@ -215,7 +215,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
               </div>
             )}
             {gameMode === 'rhythm' && (
-              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.2)' }}>
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.2)' }}>
                 <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>節奏訓練</p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
                   支援兩種模式：「拍打」模式用 TAP 按鈕或空白鍵重現節奏；「聽寫」模式用音符元件拼組出你聽到的節奏型態。
@@ -223,7 +223,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
               </div>
             )}
             {gameMode === 'progression' && (
-              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.2)' }}>
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.2)' }}>
                 <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>和弦進行辨識</p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
                   聆聽一段和弦進行，從選項中辨識出正確的和弦級數進行。
@@ -232,7 +232,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
               </div>
             )}
             {gameMode === 'scale' && (
-              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.2)' }}>
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.2)' }}>
                 <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>音階 / 調式辨識</p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
                   聆聽一段音階，辨識它屬於哪種音階或調式。
@@ -255,7 +255,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
             {gameMode === 'chord' && (
               <div className="space-y-2 animate-fade-in">
                 <label className="label">和弦屬性</label>
-                <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1 no-scrollbar">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-40 lg:max-h-60 overflow-y-auto pr-1 no-scrollbar">
                   {Object.values(ChordQuality).map(q => (
                     <button key={q} onClick={() => toggleChord(q)} className={`text-[10px] py-2 px-2.5 rounded-lg text-left truncate transition-all cursor-pointer ${chordQualities.includes(q) ? 'text-success' : 'text-tx-muted hover:text-tx-sub'}`} style={chordQualities.includes(q) ? { background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
                       {q}
@@ -267,9 +267,9 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
             {gameMode === 'interval' && (
               <div className="space-y-2 animate-fade-in">
                 <label className="label">音程</label>
-                <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1 no-scrollbar">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-40 lg:max-h-60 overflow-y-auto pr-1 no-scrollbar">
                   {Object.values(IntervalQuality).map(q => (
-                    <button key={q} onClick={() => toggleInterval(q)} className={`text-[10px] py-2 px-2.5 rounded-lg text-left truncate transition-all cursor-pointer ${intervalQualities.includes(q) ? 'text-purple-400' : 'text-tx-muted hover:text-tx-sub'}`} style={intervalQualities.includes(q) ? { background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.3)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
+                    <button key={q} onClick={() => toggleInterval(q)} className={`text-[10px] py-2 px-2.5 rounded-lg text-left truncate transition-all cursor-pointer ${intervalQualities.includes(q) ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={intervalQualities.includes(q) ? { background: 'rgba(200,149,108,0.08)', border: '1px solid rgba(200,149,108,0.3)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
                       {q}
                     </button>
                   ))}
@@ -280,7 +280,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
         </div>
 
         <div className="flex justify-center pt-2">
-          <button onClick={startGame} className="w-full sm:w-auto btn-primary px-12 py-4 text-base tracking-wide active:scale-95" style={{ boxShadow: '0 4px 20px rgba(139,92,246,0.2)' }}>
+          <button onClick={startGame} className="w-full sm:w-auto btn-primary px-12 py-4 text-base tracking-wide active:scale-95" style={{ boxShadow: '0 4px 20px rgba(200,149,108,0.2)' }}>
             開始練習
           </button>
         </div>
@@ -296,7 +296,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
 
   // ========== GAME PAGE ==========
   return (
-    <div className="flex flex-col h-full max-w-xl mx-auto p-4 sm:p-6 overflow-y-auto animate-slide-up">
+    <div className="flex flex-col h-full max-w-xl lg:max-w-4xl mx-auto p-4 sm:p-6 overflow-y-auto animate-slide-up">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <button onClick={() => { stopListening(); setMode('settings'); }} className="btn-ghost p-2 cursor-pointer">
@@ -312,9 +312,9 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center space-y-8">
+      <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center lg:justify-center gap-8 lg:gap-12">
         {/* Question Audio Section */}
-        <div className="flex flex-col items-center gap-6 w-full">
+        <div className="flex flex-col items-center gap-6 w-full lg:w-auto lg:min-w-[280px]">
           <div className="flex items-center gap-6 sm:gap-10">
             {(gameMode === 'vocal' || gameMode === 'note') && (
               <button onClick={playReferenceC} className="flex flex-col items-center gap-1.5 text-tx-muted hover:text-primary transition-colors cursor-pointer">
@@ -327,7 +327,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
               <button
                 onClick={handlePlay}
                 className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center active:scale-90 transition-all group relative overflow-hidden cursor-pointer btn-primary animate-glow-pulse"
-                style={{ boxShadow: '0 8px 32px rgba(139,92,246,0.3)' }}
+                style={{ boxShadow: '0 8px 32px rgba(200,149,108,0.3)' }}
               >
                 <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <Volume2 size={36} className="text-white" />
@@ -402,7 +402,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
         </div>
 
         {/* Status & Results */}
-        <div className="flex flex-col items-center gap-4 w-full">
+        <div className="flex flex-col items-center gap-4 w-full lg:flex-1 lg:max-w-md">
           <div className="h-8 flex items-center justify-center w-full">
             {feedback ? (
               <div className="flex items-center gap-2 animate-bounce-in">
@@ -411,7 +411,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                   <span>{currentQuestion?.answerLabel}</span>
                 </div>
                 {feedback === 'incorrect' && currentQuestion && (
-                  <button onClick={() => playNotes(currentQuestion.notes, playbackSpeed)} className="px-3 py-2 rounded-full text-[10px] font-bold cursor-pointer transition-all hover:opacity-80" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)', color: 'var(--primary-sub)' }}>
+                  <button onClick={() => playNotes(currentQuestion.notes, playbackSpeed)} className="px-3 py-2 rounded-full text-[10px] font-bold cursor-pointer transition-all hover:opacity-80" style={{ background: 'rgba(200,149,108,0.1)', border: '1px solid rgba(200,149,108,0.25)', color: 'var(--primary-sub)' }}>
                     <Volume2 size={13} />
                   </button>
                 )}
@@ -424,10 +424,10 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
           </div>
 
           {gameMode !== 'vocal' && (
-            <div className="w-full px-2 max-w-sm">
+            <div className="w-full px-2 max-w-sm lg:max-w-full">
               {gameMode === 'note' ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
                     {selectedNotes.map(n => {
                       const isSelected = userSelection.includes(n);
                       const isActuallyCorrect = feedback && currentQuestion?.answerNames.includes(n);
@@ -436,7 +436,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                       if (isActuallyCorrect) btnStyle = { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', boxShadow: '0 0 12px rgba(16,185,129,0.15)' };
                       else if (isWronglySelected) btnStyle = { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' };
                       else if (feedback) btnStyle = { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)', opacity: 0.5 };
-                      else if (isSelected) btnStyle = { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)', boxShadow: '0 2px 10px rgba(139,92,246,0.15)' };
+                      else if (isSelected) btnStyle = { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)', boxShadow: '0 2px 10px rgba(200,149,108,0.15)' };
                       return <button key={n} disabled={!!feedback} onClick={() => handleAnswerClick(n)} className="h-12 sm:h-14 rounded-xl font-bold text-base transition-all cursor-pointer" style={btnStyle}>{n}</button>;
                     })}
                   </div>
@@ -447,7 +447,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                   {(gameMode === 'chord' ? chordQualities : intervalQualities).map(q => {
                     const isCorrect = feedback && currentQuestion?.answerNames.includes(q);
                     const isSelected = userSelection.includes(q);

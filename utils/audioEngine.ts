@@ -39,7 +39,7 @@ export const getNoteFromFrequency = (frequency: number): TunerData => {
   };
 };
 
-export const autoCorrelate = (buf: Float32Array, sampleRate: number): number => {
+export const autoCorrelate = (buf: Float32Array, sampleRate: number, rmsThreshold: number = 0.01): number => {
   const SIZE = buf.length;
   const MAX_SAMPLES = Math.floor(SIZE / 2);
   let bestOffset = -1;
@@ -53,9 +53,8 @@ export const autoCorrelate = (buf: Float32Array, sampleRate: number): number => 
     rms += val * val;
   }
   rms = Math.sqrt(rms / SIZE);
-  
-  // Moderate threshold to filter noise while still detecting played notes
-  if (rms < 0.01) return -1;
+
+  if (rms < rmsThreshold) return -1;
 
   let lastCorrelation = 1;
   

@@ -303,7 +303,7 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
   const getIntensityColor = (level: BeatIntensity) => {
     switch(level) {
       case BeatIntensity.STRONG: return { dot: '#10b981', rgb: '16,185,129' };
-      case BeatIntensity.WEAK: return { dot: '#a78bfa', rgb: '167,139,250' };
+      case BeatIntensity.WEAK: return { dot: '#d4a87e', rgb: '167,139,250' };
       case BeatIntensity.POLY_A: return { dot: '#0ea5e9', rgb: '14,165,233' };
       case BeatIntensity.POLY_B: return { dot: '#f59e0b', rgb: '245,158,11' };
       case BeatIntensity.POLY_BOTH: return { dot: '#e879f9', rgb: '232,121,249' };
@@ -354,137 +354,142 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
   };
 
   return (
-    <div className="flex flex-col items-center w-full max-w-xl mx-auto p-3 sm:p-6 space-y-3 overflow-y-auto h-full no-scrollbar animate-slide-up">
+    <div className="flex flex-col items-center w-full max-w-xl lg:max-w-4xl mx-auto p-3 sm:p-6 space-y-3 lg:space-y-4 overflow-y-auto h-full no-scrollbar animate-slide-up">
 
-      {/* === Unified Main Card === */}
-      <div className="w-full card p-4 sm:p-5 space-y-4">
-        {/* Top row: Knob | BPM | Play */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col items-center gap-1">
-            <AnalogKnob value={volume} min={0} max={1} step={0.05} onChange={setVolume} label={volume === 0 ? '靜音' : '音量'} size={56} />
-            <button onClick={handleTap} className="btn-ghost py-1 px-2.5 text-[10px] uppercase tracking-wider active:scale-95">
-              Tap
-            </button>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end">
-              <span className="text-5xl sm:text-6xl font-black gradient-text leading-none">{bpm}</span>
-              <span className="label mt-0.5">BPM</span>
-            </div>
-            <button
-              onClick={togglePlay}
-              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center transition-all duration-150 active:scale-90 cursor-pointer ${
-                isPlaying ? 'bg-danger text-white' : 'btn-primary animate-glow-pulse'
-              }`}
-              style={isPlaying ? {} : { boxShadow: '0 4px 20px rgba(139,92,246,0.25)' }}
-            >
-              {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />}
-            </button>
-          </div>
-        </div>
+      {/* === Desktop: 2-column layout | Mobile: single column === */}
+      <div className="w-full lg:grid lg:grid-cols-[1fr_1fr] lg:gap-4 space-y-3 lg:space-y-0">
 
-        {/* BPM slider */}
-        <div className="flex items-center gap-2">
-          <button onClick={() => setBpm(b => Math.max(20, b - 1))} className="btn-ghost p-1.5"><Minus size={14}/></button>
-          <input type="range" min="30" max="250" value={bpm} onChange={(e) => setBpm(parseInt(e.target.value))} className="flex-1 h-1 cursor-pointer" />
-          <button onClick={() => setBpm(b => Math.min(300, b + 1))} className="btn-ghost p-1.5"><Plus size={14}/></button>
-        </div>
-
-        {/* Divider */}
-        <div className="w-full h-px" style={{ background: 'var(--bd)' }} />
-
-        {/* 2-column: Left 70% (mode + pickers) | Right 30% (speed trainer full height) */}
-        <div className="grid gap-3 items-stretch" style={{ gridTemplateColumns: '7fr 3fr' }}>
-          {/* Left: Mode toggle + Pickers */}
-          <div className="flex flex-col gap-3">
-            <div className="card-inner p-1 flex">
-              <button onClick={() => { setMode('STANDARD'); setIsPlaying(false); setCurrentStepIndex(-1); }} className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${mode === 'STANDARD' ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={mode === 'STANDARD' ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
-                標準
-              </button>
-              <button onClick={() => { setMode('POLYRHYTHM'); setIsPlaying(false); setCurrentStepIndex(-1); }} className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${mode === 'POLYRHYTHM' ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={mode === 'POLYRHYTHM' ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
-                複合節奏
+        {/* === Left column (desktop) / Main Card === */}
+        <div className="w-full card p-4 sm:p-5 lg:p-6 space-y-4 lg:space-y-5">
+          {/* Top row: Knob | BPM | Play */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col items-center gap-1">
+              <AnalogKnob value={volume} min={0} max={1} step={0.05} onChange={setVolume} label={volume === 0 ? '靜音' : '音量'} size={56} />
+              <button onClick={handleTap} className="btn-ghost py-1 px-2.5 text-[10px] uppercase tracking-wider active:scale-95">
+                Tap
               </button>
             </div>
-            <div className="flex items-center justify-center gap-3">
-              {mode === 'STANDARD' ? (
-                <>
-                  <VerticalPicker value={numerator} min={1} max={16} onChange={setNumerator} label="拍數" />
-                  <VerticalPicker value={subIndex} min={0} max={2} onChange={handleSubChange} label="細分" display={(v) => SUB_MAP[subValues[v]] || '?'} />
-                </>
-              ) : (
-                <>
-                  <VerticalPicker value={polyA} min={2} max={12} onChange={setPolyA} label="A" color="#0ea5e9" />
-                  <VerticalPicker value={polyB} min={2} max={12} onChange={setPolyB} label="B" color="#f59e0b" />
-                </>
+            <div className="flex items-center gap-3 lg:gap-5">
+              <div className="flex flex-col items-end">
+                <span className="text-5xl sm:text-6xl lg:text-7xl font-black gradient-text leading-none">{bpm}</span>
+                <span className="label mt-0.5">BPM</span>
+              </div>
+              <button
+                onClick={togglePlay}
+                className={`w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-2xl flex items-center justify-center transition-all duration-150 active:scale-90 cursor-pointer ${
+                  isPlaying ? 'bg-danger text-white' : 'btn-primary animate-glow-pulse'
+                }`}
+                style={isPlaying ? {} : { boxShadow: '0 4px 20px rgba(200,149,108,0.25)' }}
+              >
+                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* BPM slider */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => setBpm(b => Math.max(20, b - 1))} className="btn-ghost p-1.5"><Minus size={14}/></button>
+            <input type="range" min="30" max="250" value={bpm} onChange={(e) => setBpm(parseInt(e.target.value))} className="flex-1 h-1 cursor-pointer" />
+            <button onClick={() => setBpm(b => Math.min(300, b + 1))} className="btn-ghost p-1.5"><Plus size={14}/></button>
+          </div>
+
+          {/* Divider */}
+          <div className="w-full h-px" style={{ background: 'var(--bd)' }} />
+
+          {/* 2-column: Left 70% (mode + pickers) | Right 30% (speed trainer full height) */}
+          <div className="grid gap-3 items-stretch" style={{ gridTemplateColumns: '7fr 3fr' }}>
+            {/* Left: Mode toggle + Pickers */}
+            <div className="flex flex-col gap-3">
+              <div className="card-inner p-1 flex">
+                <button onClick={() => { setMode('STANDARD'); setIsPlaying(false); setCurrentStepIndex(-1); }} className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${mode === 'STANDARD' ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={mode === 'STANDARD' ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
+                  標準
+                </button>
+                <button onClick={() => { setMode('POLYRHYTHM'); setIsPlaying(false); setCurrentStepIndex(-1); }} className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${mode === 'POLYRHYTHM' ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={mode === 'POLYRHYTHM' ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
+                  複合節奏
+                </button>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                {mode === 'STANDARD' ? (
+                  <>
+                    <VerticalPicker value={numerator} min={1} max={16} onChange={setNumerator} label="拍數" />
+                    <VerticalPicker value={subIndex} min={0} max={2} onChange={handleSubChange} label="細分" display={(v) => SUB_MAP[subValues[v]] || '?'} />
+                  </>
+                ) : (
+                  <>
+                    <VerticalPicker value={polyA} min={2} max={12} onChange={setPolyA} label="A" color="#0ea5e9" />
+                    <VerticalPicker value={polyB} min={2} max={12} onChange={setPolyB} label="B" color="#f59e0b" />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Speed Trainer — stretches to match left column height */}
+            <div className="card-inner rounded-xl overflow-hidden transition-all duration-200 flex flex-col" style={trainerSettings.enabled ? { borderColor: 'rgba(245,158,11,0.2)' } : {}}>
+              <div
+                className="p-2 flex items-center justify-between cursor-pointer"
+                onClick={() => setTrainerSettings(s => ({...s, enabled: !s.enabled}))}
+              >
+                <div className="flex items-center gap-1.5">
+                  <div className="p-1 rounded-lg transition-all duration-200" style={trainerSettings.enabled ? { background: '#f59e0b', color: 'white' } : { background: 'var(--input-bg)', color: 'var(--tx-muted)' }}>
+                    <TrendingUp size={12} />
+                  </div>
+                  <span className={`font-bold text-[10px] transition-colors ${trainerSettings.enabled ? 'text-tx' : 'text-tx-muted'}`}>
+                    漸快
+                  </span>
+                </div>
+                <div className={`toggle-track ${trainerSettings.enabled ? 'active' : ''}`} style={trainerSettings.enabled ? { background: '#f59e0b' } : {}}>
+                  <div className="toggle-thumb"></div>
+                </div>
+              </div>
+              {trainerSettings.enabled && (
+                <div className="px-2 pb-2 space-y-2 animate-fade-in">
+                  <div className="space-y-1">
+                    <label className="label block">增加量</label>
+                    <div className="flex items-center justify-between">
+                      <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, increment: Math.max(1, s.increment - 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Minus size={10}/></button>
+                      <span className="text-xs font-black text-warning">+{trainerSettings.increment}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, increment: Math.min(20, s.increment + 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Plus size={10}/></button>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="label block">間隔</label>
+                    <div className="flex items-center justify-between">
+                      <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, barCount: Math.max(1, s.barCount - 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Minus size={10}/></button>
+                      <span className="text-xs font-black text-tx">{trainerSettings.barCount}bar</span>
+                      <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, barCount: Math.min(64, s.barCount + 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Plus size={10}/></button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Right: Speed Trainer — stretches to match left column height */}
-          <div className="card-inner rounded-xl overflow-hidden transition-all duration-200 flex flex-col" style={trainerSettings.enabled ? { borderColor: 'rgba(245,158,11,0.2)' } : {}}>
-            <div
-              className="p-2 flex items-center justify-between cursor-pointer"
-              onClick={() => setTrainerSettings(s => ({...s, enabled: !s.enabled}))}
-            >
-              <div className="flex items-center gap-1.5">
-                <div className="p-1 rounded-lg transition-all duration-200" style={trainerSettings.enabled ? { background: '#f59e0b', color: 'white' } : { background: 'var(--input-bg)', color: 'var(--tx-muted)' }}>
-                  <TrendingUp size={12} />
+        {/* === Right column (desktop) / Accent Grid === */}
+        <div className="w-full card p-3 lg:p-5 flex flex-col gap-2 lg:gap-3">
+          <div className="flex items-center justify-between">
+            <label className="label lg:text-xs">重音型態</label>
+            <button onClick={resetPattern} className="flex items-center gap-1 text-[10px] text-tx-muted hover:text-tx transition-colors cursor-pointer">
+              <RotateCcw size={10} /> 重置
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 lg:gap-2 justify-center card-inner p-2 lg:p-3">
+            {mode === 'STANDARD' ? (
+              Array.from({ length: numerator }).map((_, beatIdx) => (
+                <div key={beatIdx} className="flex gap-1 p-1 rounded-lg" style={{ background: 'var(--input-bg)' }}>
+                  {Array.from({ length: subdivision }).map((_, subIdx) => {
+                    const idx = beatIdx * subdivision + subIdx;
+                    return renderBeatCell(idx, grid[idx], true);
+                  })}
                 </div>
-                <span className={`font-bold text-[10px] transition-colors ${trainerSettings.enabled ? 'text-tx' : 'text-tx-muted'}`}>
-                  漸快
-                </span>
-              </div>
-              <div className={`toggle-track ${trainerSettings.enabled ? 'active' : ''}`} style={trainerSettings.enabled ? { background: '#f59e0b' } : {}}>
-                <div className="toggle-thumb"></div>
-              </div>
-            </div>
-            {trainerSettings.enabled && (
-              <div className="px-2 pb-2 space-y-2 animate-fade-in">
-                <div className="space-y-1">
-                  <label className="label block">增加量</label>
-                  <div className="flex items-center justify-between">
-                    <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, increment: Math.max(1, s.increment - 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Minus size={10}/></button>
-                    <span className="text-xs font-black text-warning">+{trainerSettings.increment}</span>
-                    <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, increment: Math.min(20, s.increment + 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Plus size={10}/></button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="label block">間隔</label>
-                  <div className="flex items-center justify-between">
-                    <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, barCount: Math.max(1, s.barCount - 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Minus size={10}/></button>
-                    <span className="text-xs font-black text-tx">{trainerSettings.barCount}bar</span>
-                    <button onClick={(e) => { e.stopPropagation(); setTrainerSettings(s => ({...s, barCount: Math.min(64, s.barCount + 1)})); }} className="w-5 h-5 rounded flex items-center justify-center cursor-pointer hover:bg-bg-hover"><Plus size={10}/></button>
-                  </div>
-                </div>
-              </div>
+              ))
+            ) : (
+              grid.map((intensity, idx) => renderBeatCell(idx, intensity, false))
             )}
           </div>
         </div>
-      </div>
 
-      {/* === Accent Grid === */}
-      <div className="w-full card p-3 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <label className="label">重音型態</label>
-          <button onClick={resetPattern} className="flex items-center gap-1 text-[10px] text-tx-muted hover:text-tx transition-colors cursor-pointer">
-            <RotateCcw size={10} /> 重置
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-1.5 justify-center card-inner p-2">
-          {mode === 'STANDARD' ? (
-            Array.from({ length: numerator }).map((_, beatIdx) => (
-              <div key={beatIdx} className="flex gap-1 p-1 rounded-lg" style={{ background: 'var(--input-bg)' }}>
-                {Array.from({ length: subdivision }).map((_, subIdx) => {
-                  const idx = beatIdx * subdivision + subIdx;
-                  return renderBeatCell(idx, grid[idx], true);
-                })}
-              </div>
-            ))
-          ) : (
-            grid.map((intensity, idx) => renderBeatCell(idx, intensity, false))
-          )}
-        </div>
       </div>
 
       <div className="h-4 w-full shrink-0"></div>

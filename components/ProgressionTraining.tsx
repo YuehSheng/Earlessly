@@ -130,7 +130,7 @@ const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                     onClick={() => toggleProg(p.id)}
                     className="text-[10px] py-2 px-2.5 rounded-lg text-left truncate transition-all cursor-pointer font-bold"
                     style={isOn
-                      ? { background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)', color: 'var(--primary-sub)' }
+                      ? { background: 'rgba(200,149,108,0.08)', border: '1px solid rgba(200,149,108,0.3)', color: 'var(--primary-sub)' }
                       : { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' }}
                   >
                     {p.label}
@@ -155,7 +155,7 @@ const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
         <>
           {/* Status */}
           <div className="mb-5 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm"
-            style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.18)' }}>
+            style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.18)' }}>
             {phase === 'playing' && (
               <><div className="w-2 h-2 rounded-full animate-pulse shrink-0" style={{ background: 'var(--primary)' }} />
                 <span style={{ color: 'var(--primary-sub)' }}>播放和弦進行中（{rootName} 調）…</span></>

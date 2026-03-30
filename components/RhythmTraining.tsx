@@ -510,7 +510,7 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
   const scoreColor = score !== null
     ? score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444'
-    : '#8b5cf6';
+    : '#c8956c';
 
   const userCellsTotal = userCells.reduce((sum, id) => sum + (CELL_MAP[id]?.value ?? 0), 0);
   const barFull = userCellsTotal >= 1.0 - 0.001;
@@ -576,7 +576,7 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
       {/* Status */}
       <div className="mb-5 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm min-h-10"
-        style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.18)' }}>
+        style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.18)' }}>
         {phase === 'idle' && (
           <><Disc size={13} style={{ color: 'var(--primary)' }} className="shrink-0" />
             <span style={{ color: 'var(--primary-sub)' }}>
@@ -680,8 +680,8 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               const cell = CELL_MAP[cellId];
               if (!cell) return null;
               const isCorrect = dictationResult ? dictationResult[i] : undefined;
-              let bg = cell.isRest ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.12)';
-              let borderStyle = '1px solid rgba(139,92,246,0.2)';
+              let bg = cell.isRest ? 'rgba(200,149,108,0.08)' : 'rgba(200,149,108,0.12)';
+              let borderStyle = '1px solid rgba(200,149,108,0.2)';
               if (isCorrect === true) { bg = 'rgba(16,185,129,0.15)'; borderStyle = '1px solid rgba(16,185,129,0.4)'; }
               if (isCorrect === false) { bg = 'rgba(239,68,68,0.15)'; borderStyle = '1px solid rgba(239,68,68,0.4)'; }
               return (
@@ -790,7 +790,7 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
           <button
             onPointerDown={handleTap}
             className="w-40 h-40 rounded-full flex flex-col items-center justify-center active:scale-90 transition-all cursor-pointer select-none"
-            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', boxShadow: '0 8px 32px rgba(139,92,246,0.3)' }}
+            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', boxShadow: '0 8px 32px rgba(200,149,108,0.3)' }}
           >
             <Disc size={40} className="text-white mb-1" />
             <span className="text-white text-sm font-bold">TAP</span>

@@ -1,12 +1,16 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Mic, MicOff, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Volume2, Settings2 } from 'lucide-react';
 import { getAudioContext, autoCorrelate, getNoteFromFrequency } from '../utils/audioEngine';
 import { TunerData } from '../types';
 
 const NOTE_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const HISTORY_DURATION = 6; // seconds of visible history
 const HISTORY_MAX = 360; // max stored points
+
+const DETECT_INTERVAL_MS = 80; // ~12.5fps instead of ~60fps
+const NOTE_STABILITY_THRESHOLD = 4; // need 4 consistent detections to switch note
+const EMA_ALPHA = 0.15; // lower = smoother (was 0.3)
 
 interface PitchPoint {
   time: number; // performance.now() ms
@@ -18,6 +22,8 @@ const Tuner: React.FC = () => {
   const [tunerData, setTunerData] = useState<TunerData | null>(null);
   const [micVolume, setMicVolume] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [rmsThreshold, setRmsThreshold] = useState(0.03);
+  const [showSettings, setShowSettings] = useState(false);
 
   const audioRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -27,6 +33,8 @@ const Tuner: React.FC = () => {
   const isListeningRef = useRef(false);
   const smoothedCentsRef = useRef(0);
   const smoothedNoteRef = useRef<{ note: string; octave: number; count: number }>({ note: '', octave: 0, count: 0 });
+  const lastDetectTimeRef = useRef(0);
+  const rmsThresholdRef = useRef(0.03);
 
   // Pitch history
   const pitchHistoryRef = useRef<PitchPoint[]>([]);
@@ -72,21 +80,28 @@ const Tuner: React.FC = () => {
 
   const updatePitch = () => {
     if (!isListeningRef.current || !analyserRef.current || !audioRef.current || !bufferRef.current) return;
+
+    const now = performance.now();
+    // Throttle detection to DETECT_INTERVAL_MS
+    if (now - lastDetectTimeRef.current < DETECT_INTERVAL_MS) {
+      rafId.current = requestAnimationFrame(updatePitch);
+      return;
+    }
+    lastDetectTimeRef.current = now;
+
     analyserRef.current.getFloatTimeDomainData(bufferRef.current);
     let sumSquares = 0.0;
     for (const amplitude of bufferRef.current) sumSquares += amplitude * amplitude;
     const volume = Math.sqrt(sumSquares / bufferRef.current.length);
     setMicVolume(volume);
-    const frequency = autoCorrelate(bufferRef.current, audioRef.current.sampleRate);
+    const frequency = autoCorrelate(bufferRef.current, audioRef.current.sampleRate, rmsThresholdRef.current);
     if (Number.isFinite(frequency) && frequency > 20 && frequency < 5000) {
       const raw = getNoteFromFrequency(frequency);
-      // EMA smoothing on cents to reduce jitter
-      const alpha = 0.3;
       // Note stability: only switch displayed note after consistent detections
       const noteKey = `${raw.note}${raw.octave}`;
       const prev = smoothedNoteRef.current;
       if (noteKey === `${prev.note}${prev.octave}`) {
-        prev.count = Math.min(prev.count + 1, 10);
+        prev.count = Math.min(prev.count + 1, 20);
       } else {
         prev.count--;
         if (prev.count <= 0) {
@@ -94,19 +109,20 @@ const Tuner: React.FC = () => {
           smoothedCentsRef.current = raw.cents;
         }
       }
-      smoothedCentsRef.current = smoothedCentsRef.current * (1 - alpha) + raw.cents * alpha;
+      // EMA smoothing on cents to reduce jitter
+      smoothedCentsRef.current = smoothedCentsRef.current * (1 - EMA_ALPHA) + raw.cents * EMA_ALPHA;
       const stableNote = smoothedNoteRef.current;
       setTunerData({
         ...raw,
-        note: (stableNote.count >= 2 ? stableNote.note : raw.note) as any,
-        octave: stableNote.count >= 2 ? stableNote.octave : raw.octave,
+        note: (stableNote.count >= NOTE_STABILITY_THRESHOLD ? stableNote.note : raw.note) as any,
+        octave: stableNote.count >= NOTE_STABILITY_THRESHOLD ? stableNote.octave : raw.octave,
         cents: Math.round(smoothedCentsRef.current),
       });
 
       // Record pitch history
       const semitone = 12 * (Math.log(frequency / 440) / Math.log(2)) + 69;
       const history = pitchHistoryRef.current;
-      history.push({ time: performance.now(), semitone });
+      history.push({ time: now, semitone });
       if (history.length > HISTORY_MAX) history.splice(0, history.length - HISTORY_MAX);
     } else {
       setTunerData(prev => prev ? { ...prev, isSilent: true } : null);
@@ -206,7 +222,7 @@ const Tuner: React.FC = () => {
         ctx.lineTo(timeToX(visible[i].time), midiToY(visible[i].semitone));
       }
     }
-    ctx.strokeStyle = computedStyle.getPropertyValue('--primary').trim() || '#8b5cf6';
+    ctx.strokeStyle = computedStyle.getPropertyValue('--primary').trim() || '#c8956c';
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -217,7 +233,7 @@ const Tuner: React.FC = () => {
     const lx = timeToX(last.time);
     const ly = midiToY(last.semitone);
     const gradient = ctx.createRadialGradient(lx, ly, 0, lx, ly, 8);
-    const primaryColor = computedStyle.getPropertyValue('--primary').trim() || '#8b5cf6';
+    const primaryColor = computedStyle.getPropertyValue('--primary').trim() || '#c8956c';
     gradient.addColorStop(0, primaryColor);
     gradient.addColorStop(1, 'transparent');
     ctx.fillStyle = gradient;
@@ -384,22 +400,72 @@ const Tuner: React.FC = () => {
         )}
       </div>
 
-      {/* Volume Meter */}
+      {/* Volume Meter & Settings */}
       {isListening && (
-        <div className="w-60 card p-3 space-y-2 animate-fade-in">
+        <div className="w-72 card p-3 space-y-3 animate-fade-in">
           <div className="flex justify-between items-center label">
             <span className="flex items-center gap-1.5"><Volume2 size={11}/> 輸入音量</span>
-            <span>{Math.round(micVolume * 1000) / 10}%</span>
+            <div className="flex items-center gap-2">
+              <span>{Math.round(micVolume * 1000) / 10}%</span>
+              <button
+                onClick={() => setShowSettings(s => !s)}
+                className="p-1 rounded hover:bg-bg-hover transition-colors cursor-pointer"
+                title="調音設定"
+              >
+                <Settings2 size={13} className={showSettings ? 'text-primary' : 'text-tx-muted'} />
+              </button>
+            </div>
           </div>
           <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
             <div
               className="h-full rounded-full transition-all duration-75"
               style={{
                 width: `${Math.min(100, micVolume * 500)}%`,
-                background: micVolume > 0.01 ? 'linear-gradient(90deg, var(--primary), var(--accent))' : 'var(--bg-active)'
+                background: micVolume > rmsThreshold ? 'linear-gradient(90deg, var(--primary), var(--accent))' : 'var(--bg-active)'
               }}
             />
+            {/* Threshold indicator line */}
+            <div className="relative h-0">
+              <div
+                className="absolute -top-1.5 w-0.5 h-1.5 rounded-full"
+                style={{
+                  left: `${Math.min(100, rmsThreshold * 500)}%`,
+                  background: 'var(--tx-muted)',
+                }}
+              />
+            </div>
           </div>
+
+          {showSettings && (
+            <div className="space-y-3 pt-2 border-t border-bd animate-fade-in">
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="label">音量閾值</span>
+                  <span className="text-xs font-mono text-tx-muted">{rmsThreshold.toFixed(3)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.005"
+                  max="0.15"
+                  step="0.005"
+                  value={rmsThreshold}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value);
+                    setRmsThreshold(v);
+                    rmsThresholdRef.current = v;
+                  }}
+                  className="w-full accent-primary cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-tx-muted">
+                  <span>靈敏</span>
+                  <span>穩定</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-tx-muted leading-relaxed">
+                提高閾值可過濾環境噪音和餘音，讓調音器只對明確的彈奏做出反應。
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -302,9 +302,9 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
     const colors: Record<string, { bg: string; bd: string; tx: string }> = {
       cyan: { bg: 'rgba(6,182,212,0.1)', bd: 'rgba(6,182,212,0.3)', tx: '#22d3ee' },
       orange: { bg: 'rgba(245,158,11,0.1)', bd: 'rgba(245,158,11,0.3)', tx: '#fb923c' },
-      purple: { bg: 'rgba(139,92,246,0.1)', bd: 'rgba(139,92,246,0.3)', tx: '#a78bfa' },
+      warm: { bg: 'rgba(200,149,108,0.1)', bd: 'rgba(200,149,108,0.3)', tx: '#d4a87e' },
     };
-    const c = colors[color] || colors.purple;
+    const c = colors[color] || colors.warm;
     return { background: c.bg, border: `1px solid ${c.bd}`, color: c.tx };
   };
 
@@ -333,7 +333,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
           {[
             { id: 'decay', icon: Hourglass, label: '衰減', active: isDecayMode, action: () => setIsDecayMode(!isDecayMode), color: 'cyan' },
             { id: 'sustain', icon: Infinity, label: '延音', active: isSustain, action: () => setIsSustain(!isSustain), color: 'orange' },
-            { id: 'chords', icon: Zap, label: '和弦', active: isSmartChord, action: () => setIsSmartChord(!isSmartChord), color: 'purple' }
+            { id: 'chords', icon: Zap, label: '和弦', active: isSmartChord, action: () => setIsSmartChord(!isSmartChord), color: 'warm' }
           ].map(btn => (
             <button
               key={btn.id} onClick={btn.action}
@@ -368,9 +368,9 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                   if (isInAttempt && isCorrect) { displayStyle = { background: 'linear-gradient(180deg, #34d399, #10b981)', borderBottom: '8px solid #059669' }; textColor = 'white'; }
                   else if (isInAttempt && !isCorrect) { displayStyle = { background: 'linear-gradient(180deg, #f87171, #ef4444)', borderBottom: '8px solid #dc2626' }; textColor = 'white'; }
                   else if (!isInAttempt && isCorrect) { displayStyle = { ...displayStyle, outline: '2px solid #10b981', outlineOffset: '-2px' }; }
-                } else if (isHardwareHold) { displayStyle = { background: 'linear-gradient(180deg, #a78bfa, #8b5cf6)', borderBottom: '8px solid #7c3aed', boxShadow: '0 0 12px rgba(139,92,246,0.3)' }; textColor = 'white'; }
-                else if (isMouseToggled) { displayStyle = { background: 'linear-gradient(180deg, #c4b5fd, #a78bfa)', borderBottom: '6px solid #8b5cf6', outline: '2px solid rgba(139,92,246,0.4)', outlineOffset: '-2px' }; textColor = 'white'; }
-                else if (isSounding) { displayStyle = { background: 'linear-gradient(180deg, #ddd6fe, #c4b5fd)', borderBottom: '6px solid #a78bfa' }; }
+                } else if (isHardwareHold) { displayStyle = { background: 'linear-gradient(180deg, #d4a87e, #c8956c)', borderBottom: '8px solid #b5845e', boxShadow: '0 0 12px rgba(200,149,108,0.3)' }; textColor = 'white'; }
+                else if (isMouseToggled) { displayStyle = { background: 'linear-gradient(180deg, #e0c8a8, #d4a87e)', borderBottom: '6px solid #c8956c', outline: '2px solid rgba(200,149,108,0.4)', outlineOffset: '-2px' }; textColor = 'white'; }
+                else if (isSounding) { displayStyle = { background: 'linear-gradient(180deg, #ecd8c0, #e0c8a8)', borderBottom: '6px solid #d4a87e' }; }
                 return (
                   <div
                     key={k.offset}
@@ -400,9 +400,9 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                 if (isInAttempt && isCorrect) displayStyle = { background: 'linear-gradient(180deg, #10b981, #059669)', borderBottom: '6px solid #047857' };
                 else if (isInAttempt && !isCorrect) displayStyle = { background: 'linear-gradient(180deg, #ef4444, #dc2626)', borderBottom: '6px solid #b91c1c' };
                 else if (!isInAttempt && isCorrect) displayStyle = { ...displayStyle, outline: '1px solid #10b981' };
-              } else if (isHardwareHold) displayStyle = { background: 'linear-gradient(180deg, #8b5cf6, #6d28d9)', borderBottom: '6px solid #5b21b6', boxShadow: '0 0 12px rgba(139,92,246,0.4)' };
-              else if (isMouseToggled) displayStyle = { background: 'linear-gradient(180deg, #7c3aed, #6d28d9)', borderBottom: '6px solid #5b21b6', outline: '1px solid #a78bfa' };
-              else if (isSounding) displayStyle = { background: 'linear-gradient(180deg, #6d28d9, #4c1d95)', borderBottom: '6px solid #3b0764' };
+              } else if (isHardwareHold) displayStyle = { background: 'linear-gradient(180deg, #c8956c, #a0734d)', borderBottom: '6px solid #8c6342', boxShadow: '0 0 12px rgba(200,149,108,0.4)' };
+              else if (isMouseToggled) displayStyle = { background: 'linear-gradient(180deg, #b5845e, #a0734d)', borderBottom: '6px solid #8c6342', outline: '1px solid #d4a87e' };
+              else if (isSounding) displayStyle = { background: 'linear-gradient(180deg, #a0734d, #8c6342)', borderBottom: '6px solid #6b4c32' };
               return (
                 <div
                   key={k.offset}
@@ -469,9 +469,9 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
         ) : (
           <div className="space-y-4 animate-fade-in h-full flex flex-col">
             <div className="flex items-center gap-3 border-b pb-3 shrink-0" style={{ borderColor: 'var(--bd)' }}>
-              <div className="p-1.5 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}><Zap size={16} /></div>
+              <div className="p-1.5 rounded-lg" style={{ background: 'var(--primary-bg)', color: 'var(--primary-sub)' }}><Zap size={16} /></div>
               <div>
-                <h3 className="font-bold text-tx leading-tight text-xs sm:text-sm">和弦記憶力挑戰</h3>
+                <h3 className="font-bold text-tx leading-tight text-xs sm:text-sm">和弦記憶力</h3>
                 <p className="label">Chord Quiz</p>
               </div>
             </div>
@@ -484,7 +484,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                     {[ChordQuality.MAJOR, ChordQuality.MINOR, ChordQuality.DIMINISHED, ChordQuality.AUGMENTED, ChordQuality.MAJOR_7, ChordQuality.MINOR_7, ChordQuality.DOMINANT_7, ChordQuality.HALF_DIM, ChordQuality.DIMINISHED_7].map(q => {
                       const isSelected = selectedQuizQualities.includes(q);
                       return (
-                        <button key={q} onClick={() => setSelectedQuizQualities(prev => prev.includes(q) ? (prev.length > 1 ? prev.filter(i => i !== q) : prev) : [...prev, q])} className="text-[10px] font-bold py-1.5 px-1.5 rounded-lg truncate text-left cursor-pointer transition-all" style={isSelected ? { background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' }}>{q}</button>
+                        <button key={q} onClick={() => setSelectedQuizQualities(prev => prev.includes(q) ? (prev.length > 1 ? prev.filter(i => i !== q) : prev) : [...prev, q])} className="text-[10px] font-bold py-1.5 px-1.5 rounded-lg truncate text-left cursor-pointer transition-all" style={isSelected ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' }}>{q}</button>
                       );
                     })}
                   </div>
@@ -492,18 +492,18 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between label">
                     <span className="flex items-center gap-1.5"><Clock size={10} /> 每題時間</span>
-                    <span style={{ color: '#f59e0b', fontWeight: 900 }}>{quizTimeLimit}s</span>
+                    <span style={{ color: 'var(--primary-sub)', fontWeight: 900 }}>{quizTimeLimit}s</span>
                   </div>
                   <input type="range" min="5" max="30" step="5" value={quizTimeLimit} onChange={(e) => setQuizTimeLimit(parseInt(e.target.value))} className="w-full h-1 cursor-pointer" />
                 </div>
                 <div className="card-inner p-3 flex justify-between items-center shrink-0">
                   <div>
                     <span className="label">最高得分</span>
-                    <div className="text-xl sm:text-2xl font-black" style={{ color: '#f59e0b' }}>{highScore}</div>
+                    <div className="text-xl sm:text-2xl font-black" style={{ color: 'var(--primary-sub)' }}>{highScore}</div>
                   </div>
-                  <Trophy className="w-6 h-6 sm:w-8 sm:h-8" style={{ color: 'rgba(245,158,11,0.15)' }} />
+                  <Trophy className="w-6 h-6 sm:w-8 sm:h-8" style={{ color: 'rgba(200,149,108,0.15)' }} />
                 </div>
-                <button onClick={startChordQuiz} className="w-full py-3 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-white" style={{ background: 'linear-gradient(90deg, #f59e0b, #f97316)', boxShadow: '0 4px 16px rgba(245,158,11,0.2)' }}>開始挑戰</button>
+                <button onClick={startChordQuiz} className="w-full py-3 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-white" style={{ background: 'linear-gradient(90deg, var(--primary), var(--accent))', boxShadow: '0 4px 16px rgba(200,149,108,0.2)' }}>開始挑戰</button>
               </div>
             ) : quizActive ? (
               <div className="flex-1 space-y-4">
@@ -517,7 +517,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                     <span className={`text-xl font-black ${timeLeft < 4 ? 'text-danger animate-pulse' : 'text-primary-sub'}`}>{timeLeft}s</span>
                   </div>
                 </div>
-                <div className="card-inner p-4 sm:p-6 flex flex-col items-center justify-center text-center" style={{ borderColor: 'rgba(139,92,246,0.15)' }}>
+                <div className="card-inner p-4 sm:p-6 flex flex-col items-center justify-center text-center" style={{ borderColor: 'rgba(200,149,108,0.15)' }}>
                   <span className="label text-primary-sub mb-1">請同時按下</span>
                   <div className="text-xl sm:text-2xl font-black text-tx">{currentChordName}</div>
                 </div>

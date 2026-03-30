@@ -336,7 +336,7 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
   const scoreColor = score !== null
     ? score >= 90 ? '#10b981' : score >= 70 ? '#f59e0b' : '#ef4444'
-    : '#8b5cf6';
+    : '#c8956c';
 
   const scoreBg = score !== null
     ? score >= 90 ? 'rgba(16,185,129,0.07)' : score >= 70 ? 'rgba(245,158,11,0.07)' : 'rgba(239,68,68,0.07)'
@@ -410,7 +410,7 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
       {/* Status Bar */}
       <div className="mb-4 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm min-h-10"
-        style={{ background: 'var(--primary-bg)', border: '1px solid rgba(139,92,246,0.18)' }}>
+        style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.18)' }}>
         {phase === 'idle' && (
           <><Sliders size={13} style={{ color: 'var(--primary)' }} className="shrink-0" />
             <span style={{ color: 'var(--primary-sub)' }}>
@@ -490,9 +490,9 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
         >
           <defs>
             <linearGradient id="ftUG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.28" />
-              <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.04" />
-              <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.18" />
+              <stop offset="0%" stopColor="#c8956c" stopOpacity="0.28" />
+              <stop offset="50%" stopColor="#c8956c" stopOpacity="0.04" />
+              <stop offset="100%" stopColor="#c8956c" stopOpacity="0.18" />
             </linearGradient>
             <linearGradient id="ftAG" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
@@ -555,7 +555,7 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
             )}
 
             {/* User curve */}
-            <path d={userCurve} fill="none" stroke="#8b5cf6" strokeWidth="2.5"
+            <path d={userCurve} fill="none" stroke="#c8956c" strokeWidth="2.5"
               clipPath="url(#ftClip)" />
 
             {/* User control nodes */}
@@ -571,22 +571,22 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                 >
                   {active && (
                     <circle cx={x} cy={y} r={24}
-                      fill="rgba(139,92,246,0.1)" />
+                      fill="rgba(200,149,108,0.1)" />
                   )}
                   {/* Hit area */}
                   <circle cx={x} cy={y} r={20} fill="transparent" />
                   {/* Outer ring */}
                   <circle cx={x} cy={y} r={9}
-                    fill="rgba(139,92,246,0.15)" stroke="#8b5cf6" strokeWidth="1.5" />
+                    fill="rgba(200,149,108,0.15)" stroke="#c8956c" strokeWidth="1.5" />
                   {/* Inner dot */}
-                  <circle cx={x} cy={y} r={4} fill="#8b5cf6" />
+                  <circle cx={x} cy={y} r={4} fill="#c8956c" />
                   {/* Drag vertical guide */}
                   {dragId === b.id && (
                     <>
                       <line x1={x} y1={0} x2={x} y2={PH}
-                        stroke="rgba(139,92,246,0.2)" strokeWidth={0.8} strokeDasharray="3,4" />
+                        stroke="rgba(200,149,108,0.2)" strokeWidth={0.8} strokeDasharray="3,4" />
                       <line x1={0} y1={y} x2={PW} y2={y}
-                        stroke="rgba(139,92,246,0.2)" strokeWidth={0.8} strokeDasharray="3,4" />
+                        stroke="rgba(200,149,108,0.2)" strokeWidth={0.8} strokeDasharray="3,4" />
                     </>
                   )}
                 </g>
