@@ -2,61 +2,100 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 常用指令
+## Commands
 
 ```bash
-npm install       # 安裝相依套件
-npm run dev       # 啟動開發伺服器（http://localhost:3000）
-npm run build     # 建置正式版
-npm run preview   # 預覽正式版建置結果
+npm install        # install dependencies
+npm run dev        # start dev server at http://localhost:3000 (all hosts bound)
+npm run build      # production build
+npm run preview    # preview production build
 ```
 
-目前專案**沒有測試框架**，package.json 中無測試相關指令。
+There is no linting, type-checking, or test script. TypeScript is checked implicitly by Vite during build.
 
-## 環境變數
+## Environment Variables
 
-需在專案根目錄建立 `.env.local`：
+Create `.env.local` in the project root:
 ```
 GEMINI_API_KEY=your_key_here
 ```
 
-Vite 在建置時會將此值注入為 `process.env.API_KEY` 與 `process.env.GEMINI_API_KEY`。
+`vite.config.ts` injects this at build time as both `process.env.GEMINI_API_KEY` and `process.env.API_KEY`. `index.tsx` polyfills `window.process = { env: {} }` for runtime access.
 
-## 架構概觀
+## Architecture
 
-**單頁應用程式（SPA）**，以 Tab 切換功能頁面，無路由函式庫。
-進入點：`index.html` → `index.tsx` → `App.tsx` → 四個功能元件之一。
+Single-page app with tab-based navigation (no router). Entry chain: `index.html` → `index.tsx` → `App.tsx` → one of four tab components.
 
-**四個 Tab**（定義於 `types.ts` 的 `Tab` 列舉）：Tuner（調音器）、Metronome（節拍器）、EarTraining（聽音訓練）、Keyboard（鍵盤）。
+**Tabs** (defined as `Tab` enum in `types.ts`): `TUNER`, `METRONOME`, `EAR_TRAINING`, `KEYBOARD`. Switching tabs unmounts/remounts the component, which stops audio and releases mic streams via `useEffect` cleanup.
 
-**樣式**：Tailwind CSS 透過 CDN 載入於 `index.html`。自訂色盤（深色主題）與 React 19、Lucide React 的 Import Map 也定義在 `index.html` 中，並非設定檔內。專案無獨立 CSS 檔，所有樣式皆為 Tailwind utility class。
+**EarTraining sub-components** rendered based on `EarTrainingSettings.mode`:
+- `FrequencyTraining` — EQ curve matching game with SVG Bode plot
+- `ScaleTraining` — scale identification quiz
+- `RhythmTraining` — tap/dictation rhythm exercises
+- `ProgressionTraining` — chord progression identification
 
-**路徑別名**：`@` 對應專案根目錄，設定於 `vite.config.ts` 及 `tsconfig.json`。
+### Audio Engine (`utils/audioEngine.ts`)
 
-### 音訊引擎（`utils/audioEngine.ts`）
+All Web Audio API logic lives here. Components hold engine instances in `useRef` — never in React state.
 
-應用程式的核心，主要匯出：
+**Singleton context:** Call `getAudioContext()` before any audio operation. Includes webkit fallback.
 
-- `getAudioContext()` — 單例 `AudioContext`；進行任何音訊操作前必須先呼叫
-- `MetronomeEngine` 類別 — 使用 Web Audio API lookahead 排程（25ms lookahead，100ms 預排）。以一維 `BeatIntensity[]` 陣列（grid）表示拍型，支援標準拍號與複節拍（polyrhythm）
-- `PolySynth` 類別 — 鍵盤用多聲部合成器，支援 decay（類鋼琴）與 sustain 兩種模式，以 `Map<number, AudioNode[]>` 追蹤發音中的音符
+**`MetronomeEngine` class:**
+- Uses Web Audio API lookahead scheduling (25 ms lookahead, 100 ms schedule-ahead window)
+- Beat grid is a flat `BeatIntensity[]` array; polyrhythm support uses LCM-based grid generation
+- `BeatIntensity`: `MUTE | WEAK | STRONG | POLY_A | POLY_B | POLY_BOTH`
 
-模組層級函式：
-- `autoCorrelate(buffer, sampleRate)` — 自相關演算法音高偵測，靜音或不可靠時回傳 -1
-- `getNoteFromFrequency(frequency)` — Hz → `TunerData`（音名、八度、音分偏移）
-- `playNotes(midiNotes, duration, type)` — 供聽音訓練播放音符（同時或琶音）
-- `generateQuestion(settings)` — 依設定隨機產生 `Question`
+**`PolySynth` class:**
+- Triangle oscillator with exponential decay envelope
+- Tracks active voices in `Map<number, AudioNode[]>` keyed by MIDI number
+- Supports `decay` (piano-style) and `sustain` modes
 
-### 元件模式
+**Module-level functions:**
+- `autoCorrelate(buffer, sampleRate, threshold)` — autocorrelation pitch detection; returns -1 for silence/unreliable
+- `getNoteFromFrequency(hz)` → `TunerData` (note name, octave, cents offset)
+- `playNotes(midiNotes, duration, type)` — simultaneous or arpeggio playback for ear training
+- `playScale(rootMidi, intervals[], speed, direction)` — sequential scale playback
+- `playChordProgression(progression, rootMidi, tempo)` — plays a full chord progression
+- `playRhythmClick(pattern, bpm)` — rhythm dictation playback
+- `generateQuestion(settings)` → `Question` — randomized ear training question factory
 
-元件以 `useRef` 持有音訊實例（例如 `useRef<MetronomeEngine>(null)`），Web Audio 節點絕不放入 React state。`useEffect` 清理函式負責停止音訊並釋放麥克風串流。
+### Types (`types.ts`)
 
-- **Tuner**：以 `requestAnimationFrame` 持續偵測音高
-- **Keyboard**：在 `window` 上監聽 `keydown`/`keyup`，將 QWERTY 按鍵（a–z、0–9）對應至 MIDI 音符；和弦測驗最高分存於 `localStorage`
+All shared enums and interfaces:
+- **Enums:** `Tab`, `NoteName`, `BeatIntensity`, `ChordQuality`, `IntervalQuality`, `ScaleType`, `RhythmDifficulty`, `RhythmMode`
+- **Interfaces:** `TunerData`, `MetronomeState`, `SpeedTrainerSettings`, `EarTrainingSettings`, `Question`, `ProgressionDef`, `RhythmCell`, `RhythmPattern`
+- **Constants:** `SCALE_INTERVALS` (object mapping `ScaleType` → interval arrays), `PROGRESSIONS` (array of 12 `ProgressionDef` entries)
+- MIDI ↔ frequency formula: `freq = 440 * 2^((midi - 69) / 12)`
 
-### 型別定義（`types.ts`）
+### Styling
 
-所有共用列舉與介面集中於此：
-- `NoteName`、`ChordQuality`、`IntervalQuality` — 音樂領域列舉
-- `TunerData`、`MetronomeState`、`EarTrainingSettings`、`Question` — 元件狀態型別
-- `BeatIntensity` — MUTE / WEAK / STRONG / POLY_A / POLY_B / POLY_BOTH
+**No CSS files.** All styles are Tailwind utility classes plus custom CSS defined directly in `index.html`.
+
+`index.html` contains:
+- Tailwind CSS via CDN (`cdn.tailwindcss.com`)
+- React 19 and Lucide React loaded via importmap from CDN — **not from `node_modules`**
+- CSS custom properties for the full theme (colors, component styles, animations)
+- `data-theme` attribute on `<html>` drives dark/light mode; stored in `localStorage` as `earlessly-theme`
+
+**CSS variable naming:** `--bg`, `--tx`, `--primary`, `--accent`, `--bd` (border), `--input-bg`, `--gauge-track`, `--kbd-white`, `--kbd-black`. Custom component classes: `.card`, `.card-inner`, `.glass`, `.btn-primary`, `.btn-ghost`, `.chip`, `.label`, `.toggle-track`.
+
+To add new component styles or change the color palette, edit `index.html` — not any config file.
+
+### Key Component Patterns
+
+**Tuner (`components/Tuner.tsx`):**
+- Pitch detection runs on 80 ms RAF throttle (not every frame)
+- Applies EMA smoothing (α = 0.15) + stability counter (4 identical detections before display update)
+- Canvas pitch history capped at 360 points (~6 s buffer); drawn via `useCallback`-memoized function
+
+**Metronome (`components/Metronome.tsx`):**
+- Contains inline `AnalogKnob` and `VerticalPicker` custom components
+- Speed trainer auto-increments BPM every N bars via `MetronomeEngine` callback
+
+**Keyboard (`components/Keyboard.tsx`):**
+- 48 QWERTY-to-MIDI bindings (`KEY_BINDINGS` array); `keydown`/`keyup` listeners on `window`
+- Chord quiz high score persisted in `localStorage`
+
+### Deployment
+
+Vite base path is `/Earlessly/` (GitHub Pages). Dev server binds `0.0.0.0` and allows all hosts including ngrok and `yuehsheng.github.io`.
