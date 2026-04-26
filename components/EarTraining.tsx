@@ -7,12 +7,13 @@ import FrequencyTraining from './FrequencyTraining';
 import RhythmTraining from './RhythmTraining';
 import ProgressionTraining from './ProgressionTraining';
 import ScaleTraining from './ScaleTraining';
+import PitchMatchingTraining from './PitchMatchingTraining';
 
 interface EarTrainingProps { volume?: number; }
 
 const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const [mode, setMode] = useState<'settings' | 'game'>('settings');
-  const [gameMode, setGameMode] = useState<'note' | 'chord' | 'interval' | 'vocal' | 'frequency' | 'rhythm' | 'progression' | 'scale'>('note');
+  const [gameMode, setGameMode] = useState<'note' | 'chord' | 'interval' | 'vocal' | 'frequency' | 'rhythm' | 'progression' | 'scale' | 'pitch'>('note');
   const [selectedNotes, setSelectedNotes] = useState<NoteName[]>(NOTE_STRINGS);
   const [octaveRange, setOctaveRange] = useState<[number, number]>([3, 5]);
   const [polyphony, setPolyphony] = useState(1);
@@ -64,7 +65,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const toggleChord = (q: ChordQuality) => setChordQualities(prev => prev.includes(q) ? (prev.length > 1 ? prev.filter(c => c !== q) : prev) : [...prev, q]);
   const toggleInterval = (q: IntervalQuality) => setIntervalQualities(prev => prev.includes(q) ? (prev.length > 1 ? prev.filter(c => c !== q) : prev) : [...prev, q]);
 
-  const startGame = () => { setScore({ correct: 0, total: 0 }); setMode('game'); if (gameMode !== 'frequency') nextQuestion(); };
+  const startGame = () => { setScore({ correct: 0, total: 0 }); setMode('game'); if (gameMode !== 'frequency' && gameMode !== 'pitch') nextQuestion(); };
 
   const nextQuestion = () => {
     setFeedback(null); setUserSelection([]); setVocalHoldProgress(0); setCurrentCentsOff(null); setMicVolume(0); stopListening();
@@ -163,8 +164,8 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
           <div className="card p-4 sm:p-6 space-y-4 lg:flex-1">
             <h3 className="font-bold text-tx text-sm flex items-center gap-2">1. 模式</h3>
             <div className="flex flex-wrap gap-1.5 p-1 card-inner lg:grid lg:grid-cols-4">
-              {(['note', 'interval', 'chord', 'vocal', 'frequency', 'rhythm', 'progression', 'scale'] as const).map(m => {
-                const labels: Record<string, string> = { note: '聽音', interval: '音程', chord: '和弦', vocal: '視唱', frequency: '頻率 EQ', rhythm: '節奏', progression: '進行', scale: '音階' };
+              {(['note', 'interval', 'chord', 'vocal', 'frequency', 'rhythm', 'progression', 'scale', 'pitch'] as const).map(m => {
+                const labels: Record<string, string> = { note: '聽音', interval: '音程', chord: '和弦', vocal: '視唱', frequency: '頻率 EQ', rhythm: '節奏', progression: '進行', scale: '音階', pitch: '音高匹配' };
                 return (
                   <button key={m} onClick={() => setGameMode(m)} className={`flex-1 py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${gameMode === m ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={gameMode === m ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
                     {labels[m]}
@@ -240,7 +241,16 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                 </p>
               </div>
             )}
-            {(gameMode !== 'interval' && gameMode !== 'chord' && gameMode !== 'frequency' && gameMode !== 'rhythm' && gameMode !== 'progression' && gameMode !== 'scale') && (
+            {gameMode === 'pitch' && (
+              <div className="rounded-xl px-4 py-3 text-sm animate-fade-in" style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.2)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--primary-sub)' }}>音高匹配測驗</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--tx-muted)' }}>
+                  系統播放一個隨機音高，聆聽後拖曳滑桿調整至相同音高。
+                  以音分差計算匹配度：完全準確得 100 分，差距 ±100 音分（一個全音）得 0 分。
+                </p>
+              </div>
+            )}
+            {(gameMode !== 'interval' && gameMode !== 'chord' && gameMode !== 'frequency' && gameMode !== 'rhythm' && gameMode !== 'progression' && gameMode !== 'scale' && gameMode !== 'pitch') && (
               <div className="space-y-2 animate-fade-in">
                 <label className="label">可用音符</label>
                 <div className="grid grid-cols-4 gap-1.5">
@@ -293,6 +303,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   if (gameMode === 'rhythm') return <RhythmTraining onBack={() => setMode('settings')} volume={volume} />;
   if (gameMode === 'progression') return <ProgressionTraining onBack={() => setMode('settings')} volume={volume} />;
   if (gameMode === 'scale') return <ScaleTraining onBack={() => setMode('settings')} volume={volume} />;
+  if (gameMode === 'pitch') return <PitchMatchingTraining onBack={() => setMode('settings')} volume={volume} />;
 
   // ========== GAME PAGE ==========
   return (

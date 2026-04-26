@@ -428,6 +428,57 @@ export const playRhythmClick = (beats: number[], bpm: number, countIn: number = 
   return new Promise(resolve => setTimeout(resolve, totalDur));
 };
 
+export const playPitchTone = (freq: number, duration: number = 2.5, volume: number = 0.5): void => {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  const now = ctx.currentTime;
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = freq;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(volume * 0.4, now + 0.05);
+  gain.gain.setValueAtTime(volume * 0.4, now + duration - 0.15);
+  gain.gain.linearRampToValueAtTime(0.0001, now + duration);
+
+  osc.start(now);
+  osc.stop(now + duration + 0.05);
+};
+
+export const createPreviewOscillator = (volume: number = 0.5) => {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = 440;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(volume * 0.3, ctx.currentTime + 0.03);
+  osc.start();
+
+  return {
+    setFrequency: (freq: number) => {
+      osc.frequency.setTargetAtTime(
+        Math.max(20, Math.min(20000, freq)),
+        ctx.currentTime,
+        0.015
+      );
+    },
+    stop: () => {
+      const now = ctx.currentTime;
+      gain.gain.setTargetAtTime(0.0001, now, 0.02);
+      try { osc.stop(now + 0.08); } catch (_) {}
+    },
+  };
+};
+
 export const generateQuestion = (settings: EarTrainingSettings): Question => {
   const candidates: number[] = [];
   const minMidi = (settings.octaveRange[0] + 1) * 12;

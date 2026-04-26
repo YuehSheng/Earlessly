@@ -168,3 +168,19 @@ export interface RhythmPattern {
   label: string;
   cells?: string[]; // RhythmCell.id sequence for dictation answer
 }
+
+// Pitch Matching Training Types
+export type PitchMatchPhase = 'idle' | 'playing' | 'answering' | 'result';
+
+export interface PitchMatchQuestion {
+  targetMidi: number;
+  targetFreq: number;
+  targetLabel: string;
+}
+
+export interface PitchMatchResult {
+  targetMidi: number;
+  userFreq: number;
+  centsError: number;
+  score: number;
+}
