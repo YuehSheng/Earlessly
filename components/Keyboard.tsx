@@ -1,11 +1,15 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { PolySynth, NOTE_STRINGS } from '../utils/audioEngine';
 import { Minus, Plus, Music, Zap, Infinity, Trash2, Hourglass, Play, CheckCircle2, RotateCcw, Trophy, Lightbulb, Settings2, Clock } from 'lucide-react';
 import { ChordQuality } from '../types';
+import { clamp } from '../utils/math';
 
-const WHITE_KEY_WIDTH: number = 50;
-const BLACK_KEY_WIDTH: number = 32;
+// Reference sizes at desktop. The piano keys scale-down from these via
+// ResizeObserver in the component when the available width is tight.
+const REF_WHITE_KEY_WIDTH = 50;
+const REF_BLACK_KEY_WIDTH = 32;
+const MIN_WHITE_KEY_WIDTH = 28;
 const KEYBOARD_HEIGHT: number = 220;
 const KEYBOARD_PADDING: number = 10;
 
@@ -295,13 +299,36 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
 
   const whiteKeys = PIANO_KEYS.filter(k => k.type === 'white');
   const blackKeys = PIANO_KEYS.filter(k => k.type === 'black');
-  const totalWidth = whiteKeys.length * WHITE_KEY_WIDTH + (KEYBOARD_PADDING * 2);
+
+  // Dynamic key sizing: white keys shrink down to MIN_WHITE_KEY_WIDTH when the
+  // container is narrower than 17 × REF_WHITE_KEY_WIDTH (the desktop default),
+  // and the keyboard becomes horizontally scrollable below that floor.
+  // Black keys scale proportionally so they keep the same width ratio.
+  const pianoScrollRef = useRef<HTMLDivElement>(null);
+  const [whiteKeyWidth, setWhiteKeyWidth] = useState(REF_WHITE_KEY_WIDTH);
+
+  useLayoutEffect(() => {
+    const el = pianoScrollRef.current;
+    if (!el) return;
+    const recompute = () => {
+      const available = el.clientWidth - KEYBOARD_PADDING * 2;
+      const ideal = Math.floor(available / whiteKeys.length);
+      setWhiteKeyWidth(clamp(ideal, MIN_WHITE_KEY_WIDTH, REF_WHITE_KEY_WIDTH));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [whiteKeys.length]);
+
+  const blackKeyWidth = Math.round(whiteKeyWidth * (REF_BLACK_KEY_WIDTH / REF_WHITE_KEY_WIDTH));
+  const totalWidth = whiteKeys.length * whiteKeyWidth + (KEYBOARD_PADDING * 2);
 
   const ctrlBtnStyle = (active: boolean, color: string): React.CSSProperties => {
     if (!active) return { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' };
     const colors: Record<string, { bg: string; bd: string; tx: string }> = {
       cyan: { bg: 'rgba(6,182,212,0.1)', bd: 'rgba(6,182,212,0.3)', tx: '#22d3ee' },
-      orange: { bg: 'rgba(245,158,11,0.1)', bd: 'rgba(245,158,11,0.3)', tx: '#fb923c' },
+      orange: { bg: 'var(--status-warning-bg)', bd: 'var(--status-warning-border)', tx: 'var(--status-warning-soft)' },
       warm: { bg: 'rgba(200,149,108,0.1)', bd: 'rgba(200,149,108,0.3)', tx: '#d4a87e' },
     };
     const c = colors[color] || colors.warm;
@@ -352,8 +379,8 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
         </div>
 
         {/* Piano Keyboard */}
-        <div className="w-full overflow-x-auto pb-4 sm:pb-8 flex justify-start sm:justify-center no-scrollbar touch-pan-x">
-          <div className="relative rounded-b-2xl flex-shrink-0" style={{ width: totalWidth, height: KEYBOARD_HEIGHT + 20, padding: `0 ${KEYBOARD_PADDING}px`, background: 'var(--bg-sub)', borderBottom: '1px solid var(--bd)', borderLeft: '1px solid var(--bd)', borderRight: '1px solid var(--bd)', boxShadow: '0 8px 32px var(--shadow-color)' }}>
+        <div ref={pianoScrollRef} className="w-full overflow-x-auto pb-4 sm:pb-8 flex justify-start sm:justify-center no-scrollbar touch-pan-x">
+          <div className="relative rounded-b-2xl flex-shrink-0" style={{ width: totalWidth, height: KEYBOARD_HEIGHT + 20, padding: `0 ${KEYBOARD_PADDING}px`, background: 'var(--bg-sub)', borderBottom: '1px solid var(--bd)', borderLeft: '1px solid var(--bd)', borderRight: '1px solid var(--bd)', boxShadow: 'var(--shadow-lg)' }}>
             <div className="absolute top-0 flex" style={{ left: KEYBOARD_PADDING }}>
               {whiteKeys.map(k => {
                 const midi = getMidiNote(k.offset);
@@ -365,10 +392,10 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                 let textColor = 'var(--tx-muted)';
                 if (showResults) {
                   const isCorrect = targetMidiNotes.includes(midi) || correctChordNotes.includes(midi);
-                  if (isInAttempt && isCorrect) { displayStyle = { background: 'linear-gradient(180deg, #34d399, #10b981)', borderBottom: '8px solid #059669' }; textColor = 'white'; }
-                  else if (isInAttempt && !isCorrect) { displayStyle = { background: 'linear-gradient(180deg, #f87171, #ef4444)', borderBottom: '8px solid #dc2626' }; textColor = 'white'; }
-                  else if (!isInAttempt && isCorrect) { displayStyle = { ...displayStyle, outline: '2px solid #10b981', outlineOffset: '-2px' }; }
-                } else if (isHardwareHold) { displayStyle = { background: 'linear-gradient(180deg, #d4a87e, #c8956c)', borderBottom: '8px solid #b5845e', boxShadow: '0 0 12px rgba(200,149,108,0.3)' }; textColor = 'white'; }
+                  if (isInAttempt && isCorrect) { displayStyle = { background: 'linear-gradient(180deg, var(--status-success-soft), var(--status-success))', borderBottom: '8px solid var(--status-success-strong)' }; textColor = 'white'; }
+                  else if (isInAttempt && !isCorrect) { displayStyle = { background: 'linear-gradient(180deg, var(--status-danger-soft), var(--status-danger))', borderBottom: '8px solid var(--status-danger-strong)' }; textColor = 'white'; }
+                  else if (!isInAttempt && isCorrect) { displayStyle = { ...displayStyle, outline: '2px solid var(--status-success)', outlineOffset: '-2px' }; }
+                } else if (isHardwareHold) { displayStyle = { background: 'linear-gradient(180deg, var(--primary-sub), var(--primary))', borderBottom: '8px solid var(--primary-hover)', boxShadow: '0 0 12px var(--primary-shadow)' }; textColor = 'white'; }
                 else if (isMouseToggled) { displayStyle = { background: 'linear-gradient(180deg, #e0c8a8, #d4a87e)', borderBottom: '6px solid #c8956c', outline: '2px solid rgba(200,149,108,0.4)', outlineOffset: '-2px' }; textColor = 'white'; }
                 else if (isSounding) { displayStyle = { background: 'linear-gradient(180deg, #ecd8c0, #e0c8a8)', borderBottom: '6px solid #d4a87e' }; }
                 return (
@@ -378,7 +405,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                     onPointerUp={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, k.chordType, false); }}
                     onPointerLeave={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, k.chordType, false); }}
                     className="relative rounded-b-lg sm:rounded-b-xl shrink-0 flex flex-col justify-end items-center pb-3 sm:pb-5 transition-all duration-75 select-none cursor-pointer"
-                    style={{ width: WHITE_KEY_WIDTH, height: KEYBOARD_HEIGHT, borderLeft: '1px solid var(--bd)', borderRight: '1px solid var(--bd)', ...displayStyle }}
+                    style={{ width: whiteKeyWidth, height: KEYBOARD_HEIGHT, borderLeft: '1px solid var(--bd)', borderRight: '1px solid var(--bd)', ...displayStyle }}
                   >
                     <span className="font-bold text-[9px] sm:text-xs pointer-events-none" style={{ color: textColor }}>{getNoteLabel(k.offset)}</span>
                     <span className="text-[7px] sm:text-[9px] font-semibold pointer-events-none mt-0.5 opacity-30 hidden xs:block" style={{ color: textColor }}>{k.label}</span>
@@ -393,14 +420,14 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
               const isInAttempt = currentAttempt.has(midi);
               const isMouseToggled = mouseSelection.has(midi);
               const isHardwareHold = keyboardMidis.has(midi);
-              const leftOffset = ((k.posIndex ?? 0) * WHITE_KEY_WIDTH) - (BLACK_KEY_WIDTH / 2) + KEYBOARD_PADDING;
+              const leftOffset = ((k.posIndex ?? 0) * whiteKeyWidth) - (blackKeyWidth / 2) + KEYBOARD_PADDING;
               let displayStyle: React.CSSProperties = { background: 'var(--kbd-black)', borderBottom: '6px solid var(--kbd-black-border)' };
               if (showResults) {
                 const isCorrect = targetMidiNotes.includes(midi) || correctChordNotes.includes(midi);
-                if (isInAttempt && isCorrect) displayStyle = { background: 'linear-gradient(180deg, #10b981, #059669)', borderBottom: '6px solid #047857' };
-                else if (isInAttempt && !isCorrect) displayStyle = { background: 'linear-gradient(180deg, #ef4444, #dc2626)', borderBottom: '6px solid #b91c1c' };
-                else if (!isInAttempt && isCorrect) displayStyle = { ...displayStyle, outline: '1px solid #10b981' };
-              } else if (isHardwareHold) displayStyle = { background: 'linear-gradient(180deg, #c8956c, #a0734d)', borderBottom: '6px solid #8c6342', boxShadow: '0 0 12px rgba(200,149,108,0.4)' };
+                if (isInAttempt && isCorrect) displayStyle = { background: 'linear-gradient(180deg, var(--status-success), var(--status-success-strong))', borderBottom: '6px solid var(--status-success-strong)' };
+                else if (isInAttempt && !isCorrect) displayStyle = { background: 'linear-gradient(180deg, var(--status-danger), var(--status-danger-strong))', borderBottom: '6px solid var(--status-danger-strong)' };
+                else if (!isInAttempt && isCorrect) displayStyle = { ...displayStyle, outline: '1px solid var(--status-success)' };
+              } else if (isHardwareHold) displayStyle = { background: 'linear-gradient(180deg, var(--primary), var(--primary-hover))', borderBottom: '6px solid var(--primary-hover)', boxShadow: '0 0 12px var(--primary-shadow-strong)' };
               else if (isMouseToggled) displayStyle = { background: 'linear-gradient(180deg, #b5845e, #a0734d)', borderBottom: '6px solid #8c6342', outline: '1px solid #d4a87e' };
               else if (isSounding) displayStyle = { background: 'linear-gradient(180deg, #a0734d, #8c6342)', borderBottom: '6px solid #6b4c32' };
               return (
@@ -410,7 +437,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                   onPointerUp={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, undefined, false); }}
                   onPointerLeave={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, undefined, false); }}
                   className="absolute top-0 rounded-b-md sm:rounded-b-lg flex flex-col justify-end items-center pb-2 sm:pb-3 transition-all duration-75 z-20 cursor-pointer shadow-lg select-none"
-                  style={{ left: leftOffset, width: BLACK_KEY_WIDTH, height: KEYBOARD_HEIGHT * 0.6, ...displayStyle }}
+                  style={{ left: leftOffset, width: blackKeyWidth, height: KEYBOARD_HEIGHT * 0.6, ...displayStyle }}
                 >
                   <span className="text-[8px] sm:text-[10px] font-bold text-white/80 pointer-events-none">{getNoteLabel(k.offset)}</span>
                   <span className="text-[6px] sm:text-[7px] font-semibold pointer-events-none mt-0.5 hidden xs:block" style={{ color: 'rgba(255,255,255,0.3)' }}>{k.label}</span>
@@ -452,7 +479,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                   <div className="flex justify-between items-center label">
                     <span>已選：{currentAttempt.size}/{numNotesToPlay}</span>
                     {showResults && (
-                      <span style={{ color: Array.from(currentAttempt).every(n => targetMidiNotes.includes(n)) && currentAttempt.size === targetMidiNotes.length ? '#10b981' : '#ef4444' }}>
+                      <span style={{ color: Array.from(currentAttempt).every(n => targetMidiNotes.includes(n)) && currentAttempt.size === targetMidiNotes.length ? 'var(--status-success)' : 'var(--status-danger)' }}>
                         {Array.from(currentAttempt).every(n => targetMidiNotes.includes(n)) && currentAttempt.size === targetMidiNotes.length ? '全對！' : '不正確'}
                       </span>
                     )}
@@ -460,7 +487,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                   <div className="grid grid-cols-1 gap-1.5">
                     <button onClick={() => targetMidiNotes.forEach((m,i)=>setTimeout(()=>synthRef.current?.play(m),i*500))} className="btn-ghost w-full py-2 text-[11px] flex items-center justify-center gap-2"><RotateCcw size={11} /> 再次播放</button>
                     <button onClick={() => setMouseSelection(new Set())} className="btn-ghost w-full py-2 text-[11px] flex items-center justify-center gap-2"><Trash2 size={11} /> 清除</button>
-                    <button disabled={currentAttempt.size < numNotesToPlay || showResults} onClick={confirmTraining} className="w-full py-2.5 rounded-xl font-bold text-[11px] flex items-center justify-center gap-2 cursor-pointer transition-all" style={currentAttempt.size < numNotesToPlay || showResults ? { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' } : { background: 'linear-gradient(90deg, #10b981, var(--primary))', color: 'white', boxShadow: '0 4px 12px rgba(16,185,129,0.2)' }}><CheckCircle2 size={13} /> 確定選擇</button>
+                    <button disabled={currentAttempt.size < numNotesToPlay || showResults} onClick={confirmTraining} className="w-full py-2.5 rounded-xl font-bold text-[11px] flex items-center justify-center gap-2 cursor-pointer transition-all" style={currentAttempt.size < numNotesToPlay || showResults ? { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' } : { background: 'linear-gradient(90deg, var(--status-success), var(--primary))', color: 'white', boxShadow: '0 4px 12px var(--status-success-bg-strong)' }}><CheckCircle2 size={13} /> 確定選擇</button>
                   </div>
                 </div>
               )}
@@ -503,7 +530,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                   </div>
                   <Trophy className="w-6 h-6 sm:w-8 sm:h-8" style={{ color: 'rgba(200,149,108,0.15)' }} />
                 </div>
-                <button onClick={startChordQuiz} className="w-full py-3 rounded-xl font-bold transition-all active:scale-95 cursor-pointer text-white" style={{ background: 'linear-gradient(90deg, var(--primary), var(--accent))', boxShadow: '0 4px 16px rgba(200,149,108,0.2)' }}>開始挑戰</button>
+                <button onClick={startChordQuiz} className="btn-gradient w-full py-3 active:scale-95">開始挑戰</button>
               </div>
             ) : quizActive ? (
               <div className="flex-1 space-y-4">
@@ -537,7 +564,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 animate-scale-in">
-                <div className="p-5 card-inner w-full" style={{ borderColor: 'rgba(239,68,68,0.15)' }}>
+                <div className="p-5 card-inner w-full" style={{ borderColor: 'var(--status-danger-border)' }}>
                   <span className="label text-danger">挑戰結束</span>
                   <div className="text-4xl sm:text-5xl font-black text-tx my-2">{quizScore}</div>
                   <p className="text-[11px] text-tx-muted">總計完成 {quizScore} 個和弦</p>

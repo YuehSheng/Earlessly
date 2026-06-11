@@ -8,7 +8,8 @@ import { BeatIntensity, SpeedTrainerSettings } from '../types';
 const AnalogKnob: React.FC<{
   value: number; min: number; max: number; step: number;
   onChange: (v: number) => void; label: string; size?: number;
-}> = ({ value, min, max, step, onChange, label, size = 64 }) => {
+  ariaLabel?: string;
+}> = ({ value, min, max, step, onChange, label, size = 64, ariaLabel }) => {
   const knobRef = useRef<SVGSVGElement>(null);
   const dragging = useRef(false);
   const startY = useRef(0);
@@ -56,15 +57,35 @@ const AnalogKnob: React.FC<{
   const nx = cx + needleLen * Math.cos(needleRad);
   const ny = cy + needleLen * Math.sin(needleRad);
 
+  // Keyboard support: ↑/↓ to adjust by step, ←/→ for finer step, Home/End to extremes.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const k = e.key;
+    let next = value;
+    if (k === 'ArrowUp' || k === 'ArrowRight') next = value + step;
+    else if (k === 'ArrowDown' || k === 'ArrowLeft') next = value - step;
+    else if (k === 'Home') next = min;
+    else if (k === 'End') next = max;
+    else return;
+    e.preventDefault();
+    onChange(Math.max(min, Math.min(max, next)));
+  };
+
   return (
     <div className="flex flex-col items-center gap-1">
       <span className="label">{label}</span>
       <svg
         ref={knobRef} width={size} height={size}
-        className="cursor-grab active:cursor-grabbing select-none"
+        role="slider"
+        tabIndex={0}
+        aria-label={ariaLabel ?? label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        className="cursor-grab active:cursor-grabbing select-none focus:outline-none"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onKeyDown={handleKeyDown}
         style={{ touchAction: 'none' }}
       >
         <path d={arcPath(startAngle, endAngle)} fill="none" stroke="var(--bg-hover)" strokeWidth="3" strokeLinecap="round" />
@@ -116,21 +137,38 @@ const VerticalPicker: React.FC<{
   const displayText = display ? display(value) : String(value);
   const textColor = color || 'var(--tx)';
 
+  // Keyboard support so users on a hardware keyboard can adjust the picker.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); inc(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); dec(); }
+    else if (e.key === 'Home') { e.preventDefault(); onChange(min); }
+    else if (e.key === 'End') { e.preventDefault(); onChange(max); }
+  };
+
   return (
     <div
       ref={containerRef}
-      className="flex flex-col items-center select-none"
+      role="slider"
+      tabIndex={0}
+      aria-label={label}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={value}
+      aria-valuetext={display ? display(value) : undefined}
+      className="flex flex-col items-center select-none focus:outline-none"
       style={{ touchAction: 'none' }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onKeyDown={handleKeyDown}
     >
       <span className="label mb-1" style={color ? { color } : {}}>{label}</span>
       <div className="card-inner rounded-xl flex flex-col items-center py-1 px-3 gap-0.5">
         <button
           onClick={(e) => { e.stopPropagation(); inc(); }}
-          className="w-7 h-5 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-bg-hover"
+          className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-bg-hover"
           onPointerDown={(e) => e.stopPropagation()}
+          aria-label={`${label} 增加`}
         >
           <ChevronUp size={14} className="text-tx-muted" />
         </button>
@@ -142,8 +180,9 @@ const VerticalPicker: React.FC<{
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); dec(); }}
-          className="w-7 h-5 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-bg-hover"
+          className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-bg-hover"
           onPointerDown={(e) => e.stopPropagation()}
+          aria-label={`${label} 減少`}
         >
           <ChevronDown size={14} className="text-tx-muted" />
         </button>
@@ -299,13 +338,14 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
     }
   };
 
-  // Color mapping — improved contrast for light mode
+  // Color mapping — rgb tuples remain literal because they're composed into
+  // rgba(...,opacity) strings for the canvas-like beat indicators.
   const getIntensityColor = (level: BeatIntensity) => {
     switch(level) {
-      case BeatIntensity.STRONG: return { dot: '#10b981', rgb: '16,185,129' };
-      case BeatIntensity.WEAK: return { dot: '#d4a87e', rgb: '167,139,250' };
+      case BeatIntensity.STRONG: return { dot: 'var(--status-success)', rgb: '16,185,129' };
+      case BeatIntensity.WEAK: return { dot: 'var(--primary-sub)', rgb: '167,139,250' };
       case BeatIntensity.POLY_A: return { dot: '#0ea5e9', rgb: '14,165,233' };
-      case BeatIntensity.POLY_B: return { dot: '#f59e0b', rgb: '245,158,11' };
+      case BeatIntensity.POLY_B: return { dot: 'var(--status-warning)', rgb: '245,158,11' };
       case BeatIntensity.POLY_BOTH: return { dot: '#e879f9', rgb: '232,121,249' };
       default: return { dot: '#6b7280', rgb: '107,114,128' };
     }
@@ -364,7 +404,7 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
           {/* Top row: Knob | BPM | Play */}
           <div className="flex items-center justify-between">
             <div className="flex flex-col items-center gap-1">
-              <AnalogKnob value={volume} min={0} max={1} step={0.05} onChange={setVolume} label={volume === 0 ? '靜音' : '音量'} size={56} />
+              <AnalogKnob value={volume} min={0} max={1} step={0.05} onChange={setVolume} label={volume === 0 ? '靜音' : '音量'} size={56} ariaLabel="節拍器音量" />
               <button onClick={handleTap} className="btn-ghost py-1 px-2.5 text-[10px] uppercase tracking-wider active:scale-95">
                 Tap
               </button>
@@ -417,27 +457,27 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
                 ) : (
                   <>
                     <VerticalPicker value={polyA} min={2} max={12} onChange={setPolyA} label="A" color="#0ea5e9" />
-                    <VerticalPicker value={polyB} min={2} max={12} onChange={setPolyB} label="B" color="#f59e0b" />
+                    <VerticalPicker value={polyB} min={2} max={12} onChange={setPolyB} label="B" color="var(--status-warning)" />
                   </>
                 )}
               </div>
             </div>
 
             {/* Right: Speed Trainer — stretches to match left column height */}
-            <div className="card-inner rounded-xl overflow-hidden transition-all duration-200 flex flex-col" style={trainerSettings.enabled ? { borderColor: 'rgba(245,158,11,0.2)' } : {}}>
+            <div className="card-inner rounded-xl overflow-hidden transition-all duration-200 flex flex-col" style={trainerSettings.enabled ? { borderColor: 'var(--status-warning-border)' } : {}}>
               <div
                 className="p-2 flex items-center justify-between cursor-pointer"
                 onClick={() => setTrainerSettings(s => ({...s, enabled: !s.enabled}))}
               >
                 <div className="flex items-center gap-1.5">
-                  <div className="p-1 rounded-lg transition-all duration-200" style={trainerSettings.enabled ? { background: '#f59e0b', color: 'white' } : { background: 'var(--input-bg)', color: 'var(--tx-muted)' }}>
+                  <div className="p-1 rounded-lg transition-all duration-200" style={trainerSettings.enabled ? { background: 'var(--status-warning)', color: 'white' } : { background: 'var(--input-bg)', color: 'var(--tx-muted)' }}>
                     <TrendingUp size={12} />
                   </div>
                   <span className={`font-bold text-[10px] transition-colors ${trainerSettings.enabled ? 'text-tx' : 'text-tx-muted'}`}>
                     漸快
                   </span>
                 </div>
-                <div className={`toggle-track ${trainerSettings.enabled ? 'active' : ''}`} style={trainerSettings.enabled ? { background: '#f59e0b' } : {}}>
+                <div className={`toggle-track ${trainerSettings.enabled ? 'active' : ''}`} style={trainerSettings.enabled ? { background: 'var(--status-warning)' } : {}}>
                   <div className="toggle-thumb"></div>
                 </div>
               </div>

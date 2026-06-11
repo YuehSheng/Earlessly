@@ -1,19 +1,22 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Play, Music, CheckCircle, XCircle, ArrowRight, Volume2, Anchor, Mic, MicOff, RotateCcw } from 'lucide-react';
-import { NoteName, ChordQuality, IntervalQuality, Question } from '../types';
+import { NoteName, ChordQuality, IntervalQuality, Question, EarTrainingMode, ClassicEarTrainingMode } from '../types';
 import { generateQuestion, playNotes, NOTE_STRINGS, getAudioContext, autoCorrelate } from '../utils/audioEngine';
 import FrequencyTraining from './FrequencyTraining';
 import RhythmTraining from './RhythmTraining';
 import ProgressionTraining from './ProgressionTraining';
 import ScaleTraining from './ScaleTraining';
 import PitchMatchingTraining from './PitchMatchingTraining';
+import MicPermissionCard, { classifyMicError, MicPermissionReason } from './common/MicPermissionCard';
 
 interface EarTrainingProps { volume?: number; }
 
+const CLASSIC_MODES: ReadonlySet<EarTrainingMode> = new Set(['note', 'chord', 'interval', 'vocal']);
+
 const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const [mode, setMode] = useState<'settings' | 'game'>('settings');
-  const [gameMode, setGameMode] = useState<'note' | 'chord' | 'interval' | 'vocal' | 'frequency' | 'rhythm' | 'progression' | 'scale' | 'pitch'>('note');
+  const [gameMode, setGameMode] = useState<EarTrainingMode>('note');
   const [selectedNotes, setSelectedNotes] = useState<NoteName[]>(NOTE_STRINGS);
   const [octaveRange, setOctaveRange] = useState<[number, number]>([3, 5]);
   const [polyphony, setPolyphony] = useState(1);
@@ -29,6 +32,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const [currentCentsOff, setCurrentCentsOff] = useState<number | null>(null);
   const [vocalHoldProgress, setVocalHoldProgress] = useState(0);
   const [micVolume, setMicVolume] = useState(0);
+  const [micError, setMicError] = useState<MicPermissionReason | null>(null);
 
   const autoAdvanceTimer = useRef<number | null>(null);
   const audioLoopRef = useRef<number | null>(null);
@@ -68,9 +72,19 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const startGame = () => { setScore({ correct: 0, total: 0 }); setMode('game'); if (gameMode !== 'frequency' && gameMode !== 'pitch') nextQuestion(); };
 
   const nextQuestion = () => {
-    setFeedback(null); setUserSelection([]); setVocalHoldProgress(0); setCurrentCentsOff(null); setMicVolume(0); stopListening();
+    setFeedback(null); setUserSelection([]); setVocalHoldProgress(0); setCurrentCentsOff(null); setMicVolume(0); setMicError(null); stopListening();
     if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
-    const q = generateQuestion({ mode: gameMode === 'vocal' ? 'note' : gameMode, selectedNotes, octaveRange, polyphony: gameMode === 'note' ? polyphony : (gameMode === 'vocal' ? 1 : 3), chordQualities, intervalQualities });
+    // Only classic ear-training modes route through this builder; delegated
+    // modes (frequency/rhythm/etc.) own their own question generation.
+    const classicMode: ClassicEarTrainingMode = CLASSIC_MODES.has(gameMode)
+      ? (gameMode === 'vocal' ? 'note' : gameMode as ClassicEarTrainingMode)
+      : 'note';
+    const q = generateQuestion({
+      mode: classicMode,
+      selectedNotes, octaveRange,
+      polyphony: gameMode === 'note' ? polyphony : (gameMode === 'vocal' ? 1 : 3),
+      chordQualities, intervalQualities,
+    });
     setCurrentQuestion(q);
   };
 
@@ -90,7 +104,10 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
       source.connect(analyser);
       analyserRef.current = analyser; micStreamRef.current = stream; bufferRef.current = new Float32Array(analyser.fftSize);
       isListeningRef.current = true; setIsListening(true); vocalLoop();
-    } catch (err) { console.error("Vocal match error:", err); alert("無法啟用麥克風，請檢查權限。"); }
+    } catch (err) {
+      console.error("Vocal match error:", err);
+      setMicError(classifyMicError(err));
+    }
   };
 
   const stopListening = () => {
@@ -267,7 +284,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                 <label className="label">和弦屬性</label>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-40 lg:max-h-60 overflow-y-auto pr-1 no-scrollbar">
                   {Object.values(ChordQuality).map(q => (
-                    <button key={q} onClick={() => toggleChord(q)} className={`text-[10px] py-2 px-2.5 rounded-lg text-left truncate transition-all cursor-pointer ${chordQualities.includes(q) ? 'text-success' : 'text-tx-muted hover:text-tx-sub'}`} style={chordQualities.includes(q) ? { background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
+                    <button key={q} onClick={() => toggleChord(q)} className={`text-[10px] py-2 px-2.5 rounded-lg text-left truncate transition-all cursor-pointer ${chordQualities.includes(q) ? 'text-success' : 'text-tx-muted hover:text-tx-sub'}`} style={chordQualities.includes(q) ? { background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
                       {q}
                     </button>
                   ))}
@@ -310,7 +327,16 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
     <div className="flex flex-col h-full max-w-xl lg:max-w-4xl mx-auto p-4 sm:p-6 overflow-y-auto animate-slide-up">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <button onClick={() => { stopListening(); setMode('settings'); }} className="btn-ghost p-2 cursor-pointer">
+        <button
+          onClick={() => {
+            // Confirm before discarding accumulated score
+            if (score.total > 0 && !window.confirm('離開將清空本次練習分數，確定要返回設定嗎？')) return;
+            stopListening();
+            setMode('settings');
+          }}
+          className="btn-ghost p-2 cursor-pointer"
+          aria-label="返回設定"
+        >
           <Settings size={18}/>
         </button>
         <div className="flex flex-col items-end">
@@ -360,8 +386,8 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
               <div className="relative w-full">
                 <button
                   onClick={toggleVocalTest}
-                  className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all cursor-pointer ${isListening ? 'bg-danger text-white' : 'btn-ghost hover:border-primary'}`}
-                  style={isListening ? { boxShadow: '0 4px 16px rgba(239,68,68,0.2)' } : {}}
+                  className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all cursor-pointer ${isListening ? 'btn-danger' : 'btn-ghost hover:border-primary'}`}
+                  style={isListening ? { boxShadow: '0 4px 16px var(--status-danger-bg-strong)' } : {}}
                 >
                   {isListening ? <RotateCcw size={18} className="animate-spin" style={{ animationDuration: '3s' }} /> : <Mic size={18} />}
                   {isListening ? '檢測中...' : '開始測試音準'}
@@ -371,11 +397,15 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                 )}
               </div>
 
+              {micError && (
+                <MicPermissionCard reason={micError} onRetry={startListening} />
+              )}
+
               <div className="w-full space-y-4 min-h-[100px] flex flex-col justify-center">
                 {isListening ? (
                   <div className="space-y-4 animate-fade-in">
                     <div className="relative h-7 rounded-full flex items-center px-1" style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
-                      <div className="absolute left-1/2 -translate-x-1/2 w-12 h-full" style={{ background: 'rgba(16,185,129,0.05)', borderLeft: '1px solid rgba(16,185,129,0.15)', borderRight: '1px solid rgba(16,185,129,0.15)' }}></div>
+                      <div className="absolute left-1/2 -translate-x-1/2 w-12 h-full" style={{ background: 'var(--status-success-bg)', borderLeft: '1px solid var(--status-success-border-soft)', borderRight: '1px solid var(--status-success-border-soft)' }}></div>
                       <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-full z-10" style={{ background: 'var(--bd)' }}></div>
                       {currentCentsOff !== null && (
                         <div
@@ -383,8 +413,8 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                           style={{
                             left: `calc(50% + ${Math.max(-50, Math.min(50, currentCentsOff / 1.5))}%)`,
                             transform: 'translateX(-50%)',
-                            background: Math.abs(currentCentsOff) < 40 ? '#10b981' : '#ef4444',
-                            boxShadow: Math.abs(currentCentsOff) < 40 ? '0 0 8px rgba(16,185,129,0.4)' : 'none',
+                            background: Math.abs(currentCentsOff) < 40 ? 'var(--status-success)' : 'var(--status-danger)',
+                            boxShadow: Math.abs(currentCentsOff) < 40 ? '0 0 8px var(--status-success-shadow)' : 'none',
                           }}
                         ></div>
                       )}
@@ -395,7 +425,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                         <span className="text-success">{vocalHoldProgress}%</span>
                       </div>
                       <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
-                        <div className="h-full rounded-full transition-all duration-100 ease-out" style={{ width: `${vocalHoldProgress}%`, background: 'linear-gradient(90deg, #10b981, var(--primary))' }}></div>
+                        <div className="h-full rounded-full transition-all duration-100 ease-out" style={{ width: `${vocalHoldProgress}%`, background: 'linear-gradient(90deg, var(--status-success), var(--primary))' }}></div>
                       </div>
                     </div>
                     <p className="text-[11px] text-center text-tx-muted font-medium">
@@ -417,7 +447,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
           <div className="h-8 flex items-center justify-center w-full">
             {feedback ? (
               <div className="flex items-center gap-2 animate-bounce-in">
-                <div className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold ${feedback === 'correct' ? 'text-success' : 'text-danger'}`} style={{ background: feedback === 'correct' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: feedback === 'correct' ? '1px solid rgba(16,185,129,0.25)' : '1px solid rgba(239,68,68,0.25)' }}>
+                <div className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold ${feedback === 'correct' ? 'text-success' : 'text-danger'}`} style={{ background: feedback === 'correct' ? 'var(--status-success-bg-strong)' : 'var(--status-danger-bg-strong)', border: feedback === 'correct' ? '1px solid var(--status-success-border)' : '1px solid var(--status-danger-border)' }}>
                   {feedback === 'correct' ? <CheckCircle size={15}/> : <XCircle size={15}/>}
                   <span>{currentQuestion?.answerLabel}</span>
                 </div>
@@ -444,15 +474,15 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                       const isActuallyCorrect = feedback && currentQuestion?.answerNames.includes(n);
                       const isWronglySelected = feedback === 'incorrect' && isSelected && !isActuallyCorrect;
                       let btnStyle: React.CSSProperties = { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-sub)' };
-                      if (isActuallyCorrect) btnStyle = { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', boxShadow: '0 0 12px rgba(16,185,129,0.15)' };
-                      else if (isWronglySelected) btnStyle = { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' };
+                      if (isActuallyCorrect) btnStyle = { background: 'var(--status-success-bg-strong)', border: '1px solid var(--status-success-border)', color: 'var(--status-success)', boxShadow: '0 0 12px var(--status-success-border-soft)' };
+                      else if (isWronglySelected) btnStyle = { background: 'var(--status-danger-bg-strong)', border: '1px solid var(--status-danger-border)', color: 'var(--status-danger)' };
                       else if (feedback) btnStyle = { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)', opacity: 0.5 };
-                      else if (isSelected) btnStyle = { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)', boxShadow: '0 2px 10px rgba(200,149,108,0.15)' };
+                      else if (isSelected) btnStyle = { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)', boxShadow: '0 2px 10px var(--primary-shadow-soft)' };
                       return <button key={n} disabled={!!feedback} onClick={() => handleAnswerClick(n)} className="h-12 sm:h-14 rounded-xl font-bold text-base transition-all cursor-pointer" style={btnStyle}>{n}</button>;
                     })}
                   </div>
                   {polyphony > 1 && !feedback && (
-                    <button onClick={checkMultiNoteAnswer} disabled={userSelection.length !== polyphony} className="w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all cursor-pointer" style={userSelection.length === polyphony ? { background: 'linear-gradient(90deg, #10b981, var(--primary))', color: 'white', boxShadow: '0 4px 16px rgba(16,185,129,0.2)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)', cursor: 'not-allowed' }}>
+                    <button onClick={checkMultiNoteAnswer} disabled={userSelection.length !== polyphony} className="w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all cursor-pointer" style={userSelection.length === polyphony ? { background: 'linear-gradient(90deg, var(--status-success), var(--primary))', color: 'white', boxShadow: '0 4px 16px var(--status-success-bg-strong)' } : { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)', cursor: 'not-allowed' }}>
                       檢查答案
                     </button>
                   )}
@@ -463,8 +493,8 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
                     const isCorrect = feedback && currentQuestion?.answerNames.includes(q);
                     const isSelected = userSelection.includes(q);
                     let btnStyle: React.CSSProperties = { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-sub)' };
-                    if (isCorrect) btnStyle = { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', boxShadow: '0 0 12px rgba(16,185,129,0.15)' };
-                    else if (isSelected && feedback === 'incorrect') btnStyle = { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' };
+                    if (isCorrect) btnStyle = { background: 'var(--status-success-bg-strong)', border: '1px solid var(--status-success-border)', color: 'var(--status-success)', boxShadow: '0 0 12px var(--status-success-border-soft)' };
+                    else if (isSelected && feedback === 'incorrect') btnStyle = { background: 'var(--status-danger-bg-strong)', border: '1px solid var(--status-danger-border)', color: 'var(--status-danger)' };
                     else if (feedback) btnStyle = { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)', opacity: 0.5 };
                     return <button key={q} disabled={!!feedback} onClick={() => handleAnswerClick(q)} className="h-12 sm:h-14 rounded-xl font-bold text-[11px] tracking-wider transition-all px-2 cursor-pointer" style={btnStyle}>{q}</button>;
                   })}

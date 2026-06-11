@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Mic, MicOff, Volume2, Settings2 } from 'lucide-react';
 import { getAudioContext, autoCorrelate, getNoteFromFrequency } from '../utils/audioEngine';
 import { TunerData } from '../types';
+import MicPermissionCard, { classifyMicError, MicPermissionReason } from './common/MicPermissionCard';
 
 const NOTE_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const HISTORY_DURATION = 6; // seconds of visible history
@@ -21,7 +22,7 @@ const Tuner: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [tunerData, setTunerData] = useState<TunerData | null>(null);
   const [micVolume, setMicVolume] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [micError, setMicError] = useState<MicPermissionReason | null>(null);
   const [rmsThreshold, setRmsThreshold] = useState(0.03);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -56,11 +57,11 @@ const Tuner: React.FC = () => {
       sourceRef.current = source;
       isListeningRef.current = true;
       setIsListening(true);
-      setError(null);
+      setMicError(null);
       updatePitch();
     } catch (err) {
       console.error(err);
-      setError("無法取得麥克風權限或麥克風不可用。");
+      setMicError(classifyMicError(err));
     }
   };
 
@@ -272,9 +273,9 @@ const Tuner: React.FC = () => {
 
   const getGaugeColor = (cents: number) => {
     const absCents = Math.abs(cents);
-    if (absCents < 5) return '#10b981';
-    if (absCents < 20) return '#f59e0b';
-    return '#ef4444';
+    if (absCents < 5) return 'var(--status-success)';
+    if (absCents < 20) return 'var(--status-warning)';
+    return 'var(--status-danger)';
   };
 
   const renderGauge = () => {
@@ -311,11 +312,11 @@ const Tuner: React.FC = () => {
       <svg width={size} height={size * 0.62} viewBox={`0 0 ${size} ${size * 0.7}`} className="drop-shadow-lg">
         <path d={arcPath(startAngle, endAngle)} fill="none" stroke="var(--gauge-track)" strokeWidth={strokeWidth} strokeLinecap="round" />
 
-        <path d={arcPath(startAngle, startAngle + totalAngle * 0.15)} fill="none" stroke="#ef4444" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
-        <path d={arcPath(startAngle + totalAngle * 0.15, startAngle + totalAngle * 0.35)} fill="none" stroke="#f59e0b" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
-        <path d={arcPath(startAngle + totalAngle * 0.35, startAngle + totalAngle * 0.65)} fill="none" stroke="#10b981" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.35" />
-        <path d={arcPath(startAngle + totalAngle * 0.65, startAngle + totalAngle * 0.85)} fill="none" stroke="#f59e0b" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
-        <path d={arcPath(startAngle + totalAngle * 0.85, endAngle)} fill="none" stroke="#ef4444" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
+        <path d={arcPath(startAngle, startAngle + totalAngle * 0.15)} fill="none" stroke="var(--status-danger)" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
+        <path d={arcPath(startAngle + totalAngle * 0.15, startAngle + totalAngle * 0.35)} fill="none" stroke="var(--status-warning)" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
+        <path d={arcPath(startAngle + totalAngle * 0.35, startAngle + totalAngle * 0.65)} fill="none" stroke="var(--status-success)" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.35" />
+        <path d={arcPath(startAngle + totalAngle * 0.65, startAngle + totalAngle * 0.85)} fill="none" stroke="var(--status-warning)" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
+        <path d={arcPath(startAngle + totalAngle * 0.85, endAngle)} fill="none" stroke="var(--status-danger)" strokeWidth={strokeWidth} strokeLinecap="round" opacity="0.25" />
 
         {ticks.map(t => {
           const angle = startAngle + (totalAngle / 2) + (t / 50) * (totalAngle / 2);
@@ -367,8 +368,8 @@ const Tuner: React.FC = () => {
               <span
                 className="text-7xl sm:text-8xl font-black tracking-tighter"
                 style={{
-                  color: inTune ? '#10b981' : 'var(--tx)',
-                  textShadow: inTune ? '0 0 24px rgba(16,185,129,0.25)' : 'none',
+                  color: inTune ? 'var(--status-success)' : 'var(--tx)',
+                  textShadow: inTune ? '0 0 24px var(--status-success-border)' : 'none',
                   transition: 'color 0.2s, text-shadow 0.2s'
                 }}
               >
@@ -481,10 +482,8 @@ const Tuner: React.FC = () => {
         </div>
       )}
 
-      {error && (
-        <div className="p-3 rounded-xl text-sm text-danger animate-scale-in" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-          {error}
-        </div>
+      {micError && (
+        <MicPermissionCard reason={micError} onRetry={startTuner} />
       )}
 
       {/* Start/Stop Button */}

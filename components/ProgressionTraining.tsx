@@ -1,37 +1,32 @@
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Settings, Play, CheckCircle, XCircle, SkipForward, Volume2 } from 'lucide-react';
 import { playChordProgression, NOTE_STRINGS } from '../utils/audioEngine';
 import { PROGRESSIONS, ProgressionDef } from '../types';
-
-type Phase = 'idle' | 'playing' | 'answering' | 'result';
+import { shuffle, noteIndex } from '../utils/math';
+import { useTrainingSession } from '../hooks/useTrainingSession';
+import GradientButton from './common/GradientButton';
+import StatusBar from './common/StatusBar';
+import OptionsGrid, { optionStyle } from './common/OptionsGrid';
+import ScoreBadge from './common/ScoreBadge';
 
 interface Props { onBack: () => void; volume?: number; }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
+interface ProgressionQuestion {
+  prog: ProgressionDef;
+  rootMidi: number;
+  options: ProgressionDef[];
 }
 
-const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
+const ProgressionTraining: React.FC<Props> = ({ onBack }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>(
     PROGRESSIONS.slice(0, 6).map(p => p.id)
   );
   const [bpm, setBpm] = useState(90);
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [currentProg, setCurrentProg] = useState<ProgressionDef | null>(null);
-  const [rootMidi, setRootMidi] = useState(60);
-  const [options, setOptions] = useState<ProgressionDef[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
-  const [score, setScore] = useState({ correct: 0, total: 0 });
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  const session = useTrainingSession<ProgressionQuestion>();
+  const { phase, setPhase, question, setQuestion, feedback, setFeedback, score, scheduleTimer, markCorrect, markIncorrect } = session;
 
   const toggleProg = (id: string) => {
     setSelectedIds(prev =>
@@ -49,47 +44,36 @@ const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
     const pool = activeProgs.length >= 2 ? activeProgs : PROGRESSIONS.slice(0, 4);
     const answer = pool[Math.floor(Math.random() * pool.length)];
-
-    // Random root: C3 to B3
     const root = 48 + Math.floor(Math.random() * 12);
-    setRootMidi(root);
-    setCurrentProg(answer);
 
-    // Generate 4 options (answer + 3 distractors)
     const others = PROGRESSIONS.filter(p => p.id !== answer.id);
     const distractors = shuffle(others).slice(0, 3);
-    setOptions(shuffle([answer, ...distractors]));
+    const options = shuffle([answer, ...distractors]);
 
-    // Play
+    setQuestion({ prog: answer, rootMidi: root, options });
     setPhase('playing');
     playChordProgression(answer.degrees, root, bpm);
 
     const totalDur = (answer.degrees.length * (60 / bpm)) * 1000 + 300;
-    timerRef.current = setTimeout(() => setPhase('answering'), totalDur);
-  }, [activeProgs, bpm]);
+    scheduleTimer(() => setPhase('answering'), totalDur);
+  }, [activeProgs, bpm, setFeedback, setQuestion, setPhase, scheduleTimer]);
 
   const replay = useCallback(() => {
-    if (!currentProg) return;
-    playChordProgression(currentProg.degrees, rootMidi, bpm);
-  }, [currentProg, rootMidi, bpm]);
+    if (!question) return;
+    playChordProgression(question.prog.degrees, question.rootMidi, bpm);
+  }, [question, bpm]);
 
   const handleAnswer = useCallback((prog: ProgressionDef) => {
-    if (feedback || !currentProg) return;
+    if (feedback || !question) return;
     setSelected(prog.id);
-
-    if (prog.id === currentProg.id) {
-      setFeedback('correct');
-      setScore(s => ({ correct: s.correct + 1, total: s.total + 1 }));
-      timerRef.current = setTimeout(() => generateQuestion(), 1200);
+    if (prog.id === question.prog.id) {
+      markCorrect(generateQuestion);
     } else {
-      setFeedback('incorrect');
-      setScore(s => ({ ...s, total: s.total + 1 }));
-      // Play correct answer after a delay
-      setTimeout(() => playChordProgression(currentProg.degrees, rootMidi, bpm), 500);
+      markIncorrect(() => playChordProgression(question.prog.degrees, question.rootMidi, bpm));
     }
-  }, [feedback, currentProg, rootMidi, bpm, generateQuestion]);
+  }, [feedback, question, bpm, generateQuestion, markCorrect, markIncorrect]);
 
-  const rootName = NOTE_STRINGS[((rootMidi % 12) + 12) % 12];
+  const rootName = question ? NOTE_STRINGS[noteIndex(question.rootMidi)] : '';
 
   return (
     <div className="flex flex-col max-w-xl mx-auto w-full px-4 py-6 animate-slide-up">
@@ -99,24 +83,16 @@ const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
           <Settings size={18} />
         </button>
         <div className="flex items-center gap-3">
-          {/* BPM */}
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)' }}>
             <button onClick={() => setBpm(b => Math.max(50, b - 10))} className="text-tx-muted hover:text-tx text-xs font-bold cursor-pointer">−</button>
             <span className="text-xs font-bold w-8 text-center" style={{ color: 'var(--primary-sub)' }}>{bpm}</span>
             <button onClick={() => setBpm(b => Math.min(160, b + 10))} className="text-tx-muted hover:text-tx text-xs font-bold cursor-pointer">+</button>
           </div>
-          {/* Score */}
-          {score.total > 0 && (
-            <div className="text-right">
-              <span className="text-lg font-black" style={{ color: 'var(--primary)' }}>{score.correct}</span>
-              <span className="text-tx-muted mx-1 font-bold">/</span>
-              <span className="text-tx-sub font-bold">{score.total}</span>
-            </div>
-          )}
+          <ScoreBadge correct={score.correct} total={score.total} />
         </div>
       </div>
 
-      {/* Progression Selector (idle) */}
+      {/* Idle: progression selector */}
       {phase === 'idle' && (
         <div className="space-y-4 mb-6">
           <div className="card p-4 space-y-3">
@@ -141,41 +117,31 @@ const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
           </div>
 
           <div className="flex justify-center">
-            <button onClick={generateQuestion}
-              className="flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-              style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+            <GradientButton onClick={generateQuestion}>
               <Play size={16} /> 開始練習
-            </button>
+            </GradientButton>
           </div>
         </div>
       )}
 
       {/* Playing / Answering / Result */}
-      {phase !== 'idle' && (
+      {phase !== 'idle' && question && (
         <>
-          {/* Status */}
-          <div className="mb-5 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm"
-            style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.18)' }}>
-            {phase === 'playing' && (
-              <><div className="w-2 h-2 rounded-full animate-pulse shrink-0" style={{ background: 'var(--primary)' }} />
-                <span style={{ color: 'var(--primary-sub)' }}>播放和弦進行中（{rootName} 調）…</span></>
-            )}
-            {phase === 'answering' && !feedback && (
-              <><Volume2 size={13} style={{ color: 'var(--primary)' }} className="shrink-0" />
-                <span style={{ color: 'var(--primary-sub)' }}>請選擇你聽到的和弦進行</span></>
-            )}
-            {feedback === 'correct' && (
-              <><CheckCircle size={13} style={{ color: '#10b981' }} className="shrink-0" />
-                <span style={{ color: '#10b981' }}>正確！{currentProg?.label}</span></>
-            )}
-            {feedback === 'incorrect' && (
-              <><XCircle size={13} style={{ color: '#ef4444' }} className="shrink-0" />
-                <span style={{ color: '#ef4444' }}>正確答案：{currentProg?.label}</span></>
-            )}
-          </div>
+          <StatusBar tone={feedback ?? phase}
+            icon={
+              phase === 'answering' && !feedback ? <Volume2 size={13} style={{ color: 'var(--primary)' }} className="shrink-0" /> :
+              feedback === 'correct' ? <CheckCircle size={13} className="shrink-0" /> :
+              feedback === 'incorrect' ? <XCircle size={13} className="shrink-0" /> :
+              undefined
+            }
+          >
+            {phase === 'playing' && `播放和弦進行中（${rootName} 調）…`}
+            {phase === 'answering' && !feedback && '請選擇你聽到的和弦進行'}
+            {feedback === 'correct' && `正確！${question.prog.label}`}
+            {feedback === 'incorrect' && `正確答案：${question.prog.label}`}
+          </StatusBar>
 
-          {/* Replay button */}
-          {(phase === 'answering' || (phase === 'playing')) && (
+          {(phase === 'answering' || phase === 'playing') && (
             <div className="flex justify-center mb-5">
               <button onClick={replay}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-80 active:scale-95 transition-all btn-ghost">
@@ -184,34 +150,28 @@ const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
             </div>
           )}
 
-          {/* Options */}
           {(phase === 'answering' || feedback) && (
-            <div className="grid grid-cols-2 gap-2.5 mb-6">
-              {options.map(opt => {
-                const isCorrect = feedback && currentProg?.id === opt.id;
+            <OptionsGrid columns={2}>
+              {question.options.map(opt => {
+                const isCorrect = feedback && question.prog.id === opt.id;
                 const isWrong = feedback === 'incorrect' && selected === opt.id;
-                let style: React.CSSProperties = { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-sub)' };
-                if (isCorrect) style = { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', boxShadow: '0 0 12px rgba(16,185,129,0.15)' };
-                else if (isWrong) style = { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' };
-                else if (feedback) style = { ...style, opacity: 0.5 };
-
+                const state = isCorrect ? 'correct' : isWrong ? 'wrong' : feedback ? 'dimmed' : 'idle';
                 return (
                   <button
                     key={opt.id}
                     disabled={!!feedback}
                     onClick={() => handleAnswer(opt)}
                     className="py-4 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer"
-                    style={style}
+                    style={optionStyle(state)}
                   >
                     <div className="text-sm mb-1">{opt.romanNumerals.join(' - ')}</div>
                     <div className="text-[10px] opacity-60">{opt.label}</div>
                   </button>
                 );
               })}
-            </div>
+            </OptionsGrid>
           )}
 
-          {/* Next / Incorrect replay */}
           {feedback && (
             <div className="flex justify-center gap-3">
               {feedback === 'incorrect' && (
@@ -219,11 +179,9 @@ const ProgressionTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                   <Volume2 size={14} /> 重聽正確答案
                 </button>
               )}
-              <button onClick={generateQuestion}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-                style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+              <GradientButton onClick={generateQuestion}>
                 <SkipForward size={16} /> 下一題
-              </button>
+              </GradientButton>
             </div>
           )}
         </>

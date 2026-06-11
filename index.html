@@ -85,6 +85,49 @@
         --kbd-white-border: #c8c0b4;
         --kbd-black: linear-gradient(180deg, #3d3a35 0%, #1a1816 100%);
         --kbd-black-border: #0e0d0b;
+
+        /* Status colors — single source of truth for success/warning/danger
+           across Tuner gauge, training scoring, and feedback chips. */
+        --status-success: #10b981;
+        --status-success-strong: #059669;
+        --status-success-soft: #34d399;
+        --status-success-bg: rgba(16,185,129,0.08);
+        --status-success-bg-strong: rgba(16,185,129,0.15);
+        --status-success-border: rgba(16,185,129,0.3);
+        --status-success-border-soft: rgba(16,185,129,0.15);
+        --status-success-shadow: rgba(16,185,129,0.4);
+        --status-warning: #f59e0b;
+        --status-warning-soft: #fbbf24;
+        --status-warning-bg: rgba(245,158,11,0.08);
+        --status-warning-border: rgba(245,158,11,0.3);
+        --status-danger: #ef4444;
+        --status-danger-strong: #dc2626;
+        --status-danger-soft: #f87171;
+        --status-danger-bg: rgba(239,68,68,0.08);
+        --status-danger-bg-strong: rgba(239,68,68,0.15);
+        --status-danger-border: rgba(239,68,68,0.3);
+
+        /* Brand-tinted ring/glow used by the warm gradient CTA and active piano keys. */
+        --primary-shadow: rgba(200,149,108,0.3);
+        --primary-shadow-soft: rgba(200,149,108,0.2);
+        --primary-shadow-strong: rgba(200,149,108,0.35);
+
+        /* Elevation */
+        --shadow-sm: 0 2px 8px var(--shadow-color);
+        --shadow-md: 0 4px 16px var(--shadow-color);
+        --shadow-lg: 0 8px 32px var(--shadow-color);
+
+        /* Motion */
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --dur-fast: 150ms;
+        --dur-base: 250ms;
+        --dur-slow: 400ms;
+
+        /* Radius */
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-full: 9999px;
       }
 
       [data-theme="light"] {
@@ -113,6 +156,36 @@
         --kbd-white-border: #d8d0c4;
         --kbd-black: linear-gradient(180deg, #3f3f46 0%, #1a1816 100%);
         --kbd-black-border: #0e0d0b;
+
+        /* Status colors — slightly darker for light-mode contrast */
+        --status-success: #047857;
+        --status-success-strong: #065f46;
+        --status-success-soft: #10b981;
+        --status-success-bg: rgba(4,120,87,0.08);
+        --status-success-bg-strong: rgba(4,120,87,0.15);
+        --status-success-border: rgba(4,120,87,0.3);
+        --status-success-border-soft: rgba(4,120,87,0.15);
+        --status-success-shadow: rgba(4,120,87,0.4);
+        --status-warning: #b45309;
+        --status-warning-soft: #d97706;
+        --status-warning-bg: rgba(180,83,9,0.08);
+        --status-warning-border: rgba(180,83,9,0.3);
+        --status-danger: #b91c1c;
+        --status-danger-strong: #991b1b;
+        --status-danger-soft: #dc2626;
+        --status-danger-bg: rgba(185,28,28,0.08);
+        --status-danger-bg-strong: rgba(185,28,28,0.15);
+        --status-danger-border: rgba(185,28,28,0.3);
+
+        --primary-shadow: rgba(160,115,77,0.3);
+        --primary-shadow-soft: rgba(160,115,77,0.2);
+        --primary-shadow-strong: rgba(160,115,77,0.35);
+      }
+
+      /* Smooth color transitions when switching themes */
+      :root {
+        transition: background-color var(--dur-base, 250ms) var(--ease-out, ease-out),
+                    color var(--dur-base, 250ms) var(--ease-out, ease-out);
       }
 
       /* ===== ANIMATIONS ===== */
@@ -201,24 +274,74 @@
         background: var(--primary);
         color: white;
         border: none;
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         font-weight: 700;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition: all var(--dur-fast) var(--ease-out);
       }
       .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
       .btn-primary:active { transform: translateY(0) scale(0.98); }
+      .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
       .btn-ghost {
         background: var(--input-bg);
         color: var(--tx-sub);
         border: 1px solid var(--bd);
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition: all var(--dur-fast) var(--ease-out);
       }
       .btn-ghost:hover { background: var(--bg-hover); color: var(--tx); border-color: var(--bd-strong); }
+      .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      /* Warm-gradient CTA used across training modes. Single source of truth
+         for the `linear-gradient(135deg, var(--primary), var(--accent))` that
+         previously appeared inline in a dozen places. */
+      .btn-gradient {
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+        box-shadow: 0 4px 16px var(--primary-shadow-soft);
+      }
+      .btn-gradient:hover { opacity: 0.9; }
+      .btn-gradient:active { transform: scale(0.97); }
+      .btn-gradient:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+      .btn-danger {
+        background: var(--status-danger);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        cursor: pointer;
+        transition: all var(--dur-fast) var(--ease-out);
+      }
+      .btn-danger:hover { background: var(--status-danger-strong); }
+      .btn-danger:active { transform: scale(0.98); }
+
+      .card-elevated {
+        background: var(--bg-card);
+        border: 1px solid var(--bd);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+      }
+
+      /* Visible focus ring for keyboard users (mouse users get the default :focus
+         which most browsers suppress). */
+      :focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+        border-radius: inherit;
+      }
+
+      /* Universal disabled styling for any <button> that doesn't use the
+         dedicated component classes above. */
+      button:disabled { cursor: not-allowed; }
 
       .input-field {
         background: var(--input-bg);

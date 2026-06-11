@@ -2,6 +2,8 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Settings, Play, CheckCircle, Headphones, SkipForward, Sliders, Upload, X, Music } from 'lucide-react';
 import { getAudioContext } from '../utils/audioEngine';
+import { getScorePalette } from '../utils/scoring';
+import GradientButton from './common/GradientButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -332,19 +334,12 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
   const activeBand = user.find(b => b.id === (dragId ?? hoverId));
 
-  // ── Score bar color ─────────────────────────────────────────────────────
-
-  const scoreColor = score !== null
-    ? score >= 90 ? '#10b981' : score >= 70 ? '#f59e0b' : '#ef4444'
-    : '#c8956c';
-
-  const scoreBg = score !== null
-    ? score >= 90 ? 'rgba(16,185,129,0.07)' : score >= 70 ? 'rgba(245,158,11,0.07)' : 'rgba(239,68,68,0.07)'
-    : 'transparent';
-
-  const scoreBorder = score !== null
-    ? score >= 90 ? 'rgba(16,185,129,0.25)' : score >= 70 ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)'
-    : 'transparent';
+  // Tighter thresholds than the default 80/50 because the EQ similarity scale
+  // is more forgiving (RMS error scaled to 0..100).
+  const palette = score !== null ? getScorePalette(score, [90, 70]) : null;
+  const scoreColor = palette?.color ?? 'var(--primary)';
+  const scoreBg = palette?.bg ?? 'transparent';
+  const scoreBorder = palette?.border ?? 'transparent';
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -383,7 +378,7 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
           <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileUpload} />
           {customAudioName ? (
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold"
-              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', color: '#10b981' }}>
+              style={{ background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)', color: 'var(--status-success)' }}>
               <Music size={12} />
               <span className="max-w-20 truncate">{customAudioName}</span>
               <button onClick={clearCustomAudio} className="ml-0.5 hover:opacity-70 cursor-pointer"><X size={12} /></button>
@@ -463,17 +458,20 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                 你的答案
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-5" style={{ borderTop: '2px dashed #10b981' }} />
+                <div className="w-5" style={{ borderTop: '2px dashed var(--status-success)' }} />
                 正確答案
               </div>
             </div>
           )}
         </div>
 
-        {/* SVG EQ Plot */}
+        {/* SVG EQ Plot — viewBox makes it intrinsically responsive.
+            Min-height keeps it usable on phones; max-height stops it from
+            ballooning on ultrawides. */}
         <svg
           ref={svgRef}
           viewBox={`0 0 ${SW} ${SH}`}
+          preserveAspectRatio="xMidYMid meet"
           className="w-full block"
           style={{
             background: '#080810',
@@ -481,6 +479,8 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
             cursor: dragId !== null ? 'grabbing' : phase === 'answering' ? 'crosshair' : 'default',
             userSelect: 'none',
             WebkitUserSelect: 'none',
+            minHeight: 180,
+            maxHeight: 320,
           }}
           onPointerDown={onDown}
           onPointerMove={onMove}
@@ -495,9 +495,9 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               <stop offset="100%" stopColor="#c8956c" stopOpacity="0.18" />
             </linearGradient>
             <linearGradient id="ftAG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
-              <stop offset="50%" stopColor="#10b981" stopOpacity="0" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0.12" />
+              <stop offset="0%" stopColor="var(--status-success)" stopOpacity="0.2" />
+              <stop offset="50%" stopColor="var(--status-success)" stopOpacity="0" />
+              <stop offset="100%" stopColor="var(--status-success)" stopOpacity="0.12" />
             </linearGradient>
             <clipPath id="ftClip">
               <rect x="0" y="0" width={PW} height={PH} />
@@ -550,7 +550,7 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
             {/* Answer curve (result) */}
             {ansCurve && (
-              <path d={ansCurve} fill="none" stroke="#10b981" strokeWidth="2"
+              <path d={ansCurve} fill="none" stroke="var(--status-success)" strokeWidth="2"
                 strokeDasharray="8,4" clipPath="url(#ftClip)" />
             )}
 
@@ -573,8 +573,8 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                     <circle cx={x} cy={y} r={24}
                       fill="rgba(200,149,108,0.1)" />
                   )}
-                  {/* Hit area */}
-                  <circle cx={x} cy={y} r={20} fill="transparent" />
+                  {/* Hit area — enlarged for touch (visual outer ring stays r=9). */}
+                  <circle cx={x} cy={y} r={28} fill="transparent" />
                   {/* Outer ring */}
                   <circle cx={x} cy={y} r={9}
                     fill="rgba(200,149,108,0.15)" stroke="#c8956c" strokeWidth="1.5" />
@@ -600,8 +600,8 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               return (
                 <g key={b.id}>
                   <circle cx={x} cy={y} r={9}
-                    fill="rgba(16,185,129,0.15)" stroke="#10b981" strokeWidth="1.5" />
-                  <circle cx={x} cy={y} r={4} fill="#10b981" />
+                    fill="var(--status-success-bg-strong)" stroke="var(--status-success)" strokeWidth="1.5" />
+                  <circle cx={x} cy={y} r={4} fill="var(--status-success)" />
                 </g>
               );
             })}
@@ -628,14 +628,7 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
             </div>
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
               <div className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${score}%`,
-                  background: score >= 90
-                    ? 'linear-gradient(90deg,#10b981,#34d399)'
-                    : score >= 70
-                      ? 'linear-gradient(90deg,#f59e0b,#fbbf24)'
-                      : 'linear-gradient(90deg,#ef4444,#f87171)',
-                }} />
+                style={{ width: `${score}%`, background: palette?.gradient }} />
             </div>
           </div>
         </div>
@@ -644,11 +637,9 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
       {/* Control Buttons */}
       <div className="flex gap-3 flex-wrap justify-center">
         {phase === 'idle' && (
-          <button onClick={start}
-            className="flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+          <GradientButton onClick={start} size="lg">
             <Play size={16} /> 開始訓練
-          </button>
+          </GradientButton>
         )}
 
         {phase === 'playing' && (
@@ -669,20 +660,16 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               className="flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-80 active:scale-95 transition-all btn-ghost disabled:opacity-40">
               <Headphones size={14} /> {previewing ? '播放中…' : '試聽 EQ'}
             </button>
-            <button onClick={submit}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-              style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+            <GradientButton onClick={submit}>
               <CheckCircle size={15} /> 提交答案
-            </button>
+            </GradientButton>
           </>
         )}
 
         {phase === 'result' && (
-          <button onClick={start}
-            className="flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+          <GradientButton onClick={start} size="lg">
             <SkipForward size={16} /> 下一題
-          </button>
+          </GradientButton>
         )}
       </div>
     </div>

@@ -3,6 +3,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Settings, Play, RotateCcw, Disc, CheckCircle, SkipForward, Volume2, Trash2, PenLine } from 'lucide-react';
 import { getAudioContext } from '../utils/audioEngine';
 import { RhythmDifficulty, RhythmPattern, RhythmCell, RhythmMode } from '../types';
+import { getScorePalette } from '../utils/scoring';
+import GradientButton from './common/GradientButton';
 
 // ── Rhythm Cell Library ─────────────────────────────────────────────────────
 
@@ -508,9 +510,8 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
     return () => window.removeEventListener('keydown', handleKey);
   }, [handleTap]);
 
-  const scoreColor = score !== null
-    ? score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444'
-    : '#c8956c';
+  const palette = score !== null ? getScorePalette(score) : null;
+  const scoreColor = palette?.color ?? 'var(--primary)';
 
   const userCellsTotal = userCells.reduce((sum, id) => sum + (CELL_MAP[id]?.value ?? 0), 0);
   const barFull = userCellsTotal >= 1.0 - 0.001;
@@ -588,15 +589,15 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
             <span style={{ color: 'var(--primary-sub)' }}>預備拍…</span></>
         )}
         {phase === 'playing' && (
-          <><div className="w-2 h-2 rounded-full animate-pulse shrink-0" style={{ background: '#f59e0b' }} />
+          <><div className="w-2 h-2 rounded-full animate-pulse shrink-0" style={{ background: 'var(--status-warning)' }} />
             <span style={{ color: 'var(--primary-sub)' }}>仔細聆聽節奏型態…</span></>
         )}
         {phase === 'recording' && (
-          <><div className="w-2 h-2 rounded-full animate-pulse shrink-0" style={{ background: '#ef4444' }} />
+          <><div className="w-2 h-2 rounded-full animate-pulse shrink-0" style={{ background: 'var(--status-danger)' }} />
             <span style={{ color: 'var(--primary-sub)' }}>現在輪到你！點擊下方按鈕或按空白鍵打出節奏</span></>
         )}
         {phase === 'dictation' && (
-          <><PenLine size={13} style={{ color: '#f59e0b' }} className="shrink-0" />
+          <><PenLine size={13} style={{ color: 'var(--status-warning)' }} className="shrink-0" />
             <span style={{ color: 'var(--primary-sub)' }}>選擇音符拼出你聽到的節奏，填滿一小節後送出</span></>
         )}
         {phase === 'result' && score !== null && (
@@ -622,8 +623,8 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               let bg = 'var(--input-bg)';
               let border = '1px solid var(--bd)';
               if (result) {
-                if (result.hit) { bg = 'rgba(16,185,129,0.15)'; border = '1px solid rgba(16,185,129,0.4)'; }
-                else { bg = 'rgba(239,68,68,0.15)'; border = '1px solid rgba(239,68,68,0.4)'; }
+                if (result.hit) { bg = 'var(--status-success-bg-strong)'; border = '1px solid var(--status-success-border)'; }
+                else { bg = 'var(--status-danger-bg-strong)'; border = '1px solid var(--status-danger-border)'; }
               }
               return (
                 <div key={i} className="flex flex-col items-center gap-1">
@@ -632,7 +633,7 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                     {result ? (result.hit ? '✓' : '✗') : (Math.round(pos * 4 * 100) / 100).toFixed(1)}
                   </div>
                   {result && result.hit && (
-                    <span className="text-[9px] font-mono" style={{ color: Math.abs(result.offset) < 30 ? '#10b981' : '#f59e0b' }}>
+                    <span className="text-[9px] font-mono" style={{ color: Math.abs(result.offset) < 30 ? 'var(--status-success)' : 'var(--status-warning)' }}>
                       {result.offset > 0 ? '+' : ''}{Math.round(result.offset)}ms
                     </span>
                   )}
@@ -655,10 +656,10 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                   <div className="h-full rounded-full transition-all duration-300"
                     style={{
                       width: `${Math.min(100, userCellsTotal * 100)}%`,
-                      background: barFull ? '#10b981' : 'var(--primary)',
+                      background: barFull ? 'var(--status-success)' : 'var(--primary)',
                     }} />
                 </div>
-                <span className="text-[10px] font-mono" style={{ color: barFull ? '#10b981' : 'var(--tx-muted)' }}>
+                <span className="text-[10px] font-mono" style={{ color: barFull ? 'var(--status-success)' : 'var(--tx-muted)' }}>
                   {Math.round(userCellsTotal * 4)}/4
                 </span>
               </div>
@@ -682,8 +683,8 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               const isCorrect = dictationResult ? dictationResult[i] : undefined;
               let bg = cell.isRest ? 'rgba(200,149,108,0.08)' : 'rgba(200,149,108,0.12)';
               let borderStyle = '1px solid rgba(200,149,108,0.2)';
-              if (isCorrect === true) { bg = 'rgba(16,185,129,0.15)'; borderStyle = '1px solid rgba(16,185,129,0.4)'; }
-              if (isCorrect === false) { bg = 'rgba(239,68,68,0.15)'; borderStyle = '1px solid rgba(239,68,68,0.4)'; }
+              if (isCorrect === true) { bg = 'var(--status-success-bg-strong)'; borderStyle = '1px solid var(--status-success-border)'; }
+              if (isCorrect === false) { bg = 'var(--status-danger-bg-strong)'; borderStyle = '1px solid var(--status-danger-border)'; }
               return (
                 <div key={i} className="flex flex-col items-center gap-0.5"
                   style={{ cursor: phase === 'dictation' ? 'pointer' : 'default' }}
@@ -711,10 +712,10 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                   return (
                     <div key={i} className="flex flex-col items-center gap-0.5">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold"
-                        style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                        style={{ background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)' }}>
                         {cell.label}
                       </div>
-                      <span className="text-[9px] font-mono" style={{ color: '#10b981' }}>
+                      <span className="text-[9px] font-mono" style={{ color: 'var(--status-success)' }}>
                         {cell.isRest ? '休' : cell.id}
                       </span>
                     </div>
@@ -742,7 +743,7 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
                   disabled={wouldExceed}
                   onClick={() => addCell(cell.id)}
                   className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-                  style={{ background: cell.isRest ? 'rgba(245,158,11,0.08)' : 'var(--input-bg)', border: `1px solid ${cell.isRest ? 'rgba(245,158,11,0.2)' : 'var(--bd)'}` }}>
+                  style={{ background: cell.isRest ? 'var(--status-warning-bg)' : 'var(--input-bg)', border: `1px solid ${cell.isRest ? 'var(--status-warning-border)' : 'var(--bd)'}` }}>
                   <span className="text-xl">{cell.label}</span>
                   <span className="text-[9px] font-mono" style={{ color: 'var(--tx-muted)' }}>
                     {cell.isRest ? '休止' : cell.id === 'w' ? '全' : cell.id === 'h' ? '二分' : cell.id === 'dq' ? '附點' : cell.id === 'q' ? '四分' : cell.id === 'e' ? '八分' : '十六分'}
@@ -755,14 +756,11 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
       )}
 
       {/* Score Card */}
-      {phase === 'result' && score !== null && (
+      {phase === 'result' && score !== null && palette && (
         <div className="mb-5 rounded-2xl p-5 animate-scale-in flex items-center justify-between gap-6"
-          style={{
-            background: score >= 80 ? 'rgba(16,185,129,0.07)' : score >= 50 ? 'rgba(245,158,11,0.07)' : 'rgba(239,68,68,0.07)',
-            border: `1px solid ${score >= 80 ? 'rgba(16,185,129,0.25)' : score >= 50 ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)'}`,
-          }}>
+          style={{ background: palette.bg, border: `1px solid ${palette.border}` }}>
           <div>
-            <div className="text-4xl font-black mb-0.5" style={{ color: scoreColor }}>{score}%</div>
+            <div className="text-4xl font-black mb-0.5" style={{ color: palette.color }}>{score}%</div>
             <div className="text-sm" style={{ color: 'var(--tx-muted)' }}>
               {score >= 80 ? (rhythmMode === 'tap' ? '節奏正確 ✓' : '譜寫正確 ✓') : score >= 50 ? '接近正確' : '需要加強'}
             </div>
@@ -770,14 +768,7 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
           <div className="flex-1 max-w-40">
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
               <div className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${score}%`,
-                  background: score >= 80
-                    ? 'linear-gradient(90deg,#10b981,#34d399)'
-                    : score >= 50
-                      ? 'linear-gradient(90deg,#f59e0b,#fbbf24)'
-                      : 'linear-gradient(90deg,#ef4444,#f87171)',
-                }} />
+                style={{ width: `${score}%`, background: palette.gradient }} />
             </div>
           </div>
         </div>
@@ -789,8 +780,8 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
         {rhythmMode === 'tap' && phase === 'recording' && (
           <button
             onPointerDown={handleTap}
-            className="w-40 h-40 rounded-full flex flex-col items-center justify-center active:scale-90 transition-all cursor-pointer select-none"
-            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', boxShadow: '0 8px 32px rgba(200,149,108,0.3)' }}
+            className="btn-gradient w-40 h-40 rounded-full flex flex-col items-center justify-center active:scale-90 transition-all select-none"
+            style={{ boxShadow: '0 8px 32px var(--primary-shadow)' }}
           >
             <Disc size={40} className="text-white mb-1" />
             <span className="text-white text-sm font-bold">TAP</span>
@@ -799,11 +790,9 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
 
         {/* Start button */}
         {phase === 'idle' && (
-          <button onClick={start}
-            className="flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+          <GradientButton onClick={start} size="lg">
             <Play size={16} /> 開始訓練
-          </button>
+          </GradientButton>
         )}
 
         {/* Playing/CountIn indicator */}
@@ -825,13 +814,9 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-sub)' }}>
               <Volume2 size={14} /> 重播
             </button>
-            <button
-              onClick={submitDictation}
-              disabled={!barFull}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+            <GradientButton onClick={submitDictation} disabled={!barFull} size="md">
               <CheckCircle size={14} /> 送出答案
-            </button>
+            </GradientButton>
           </div>
         )}
 
@@ -848,15 +833,13 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
               <button onClick={replayCorrectAnswer}
                 disabled={isReplaying}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-xs cursor-pointer hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', color: '#10b981' }}>
+                style={{ background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)', color: 'var(--status-success)' }}>
                 <Volume2 size={13} /> 正確答案
               </button>
             </div>
-            <button onClick={start}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-              style={{ background: 'linear-gradient(135deg,var(--primary),var(--accent))', color: 'white' }}>
+            <GradientButton onClick={start} size="md">
               <SkipForward size={16} /> 下一題
-            </button>
+            </GradientButton>
           </div>
         )}
       </div>

@@ -34,25 +34,25 @@ export enum BeatIntensity {
   MUTE = 0,
   WEAK = 1,
   STRONG = 2,
-  POLY_A = 3,     // Rhythm A only
-  POLY_B = 4,     // Rhythm B only
-  POLY_BOTH = 5   // Both Rhythms coincide
+  POLY_A = 3,
+  POLY_B = 4,
+  POLY_BOTH = 5
 }
 
 export interface MetronomeState {
   bpm: number;
   isPlaying: boolean;
-  beatsPerBar: number; // Numerator
-  noteValue: number;   // Denominator
-  subdivision: number; // 1 = quarter, 2 = 8th, 4 = 16th
+  beatsPerBar: number;
+  noteValue: number;
+  subdivision: number;
   grid: BeatIntensity[];
 }
 
 export interface SpeedTrainerSettings {
   enabled: boolean;
-  barCount: number;      // How many bars before increasing
-  increment: number;     // How much BPM to add
-  currentBarTracker: number; // Internal counter
+  barCount: number;
+  increment: number;
+  currentBarTracker: number;
 }
 
 // Ear Training Types
@@ -83,20 +83,37 @@ export enum IntervalQuality {
   P8 = 'Octave'
 }
 
+export type EarTrainingMode =
+  | 'note'
+  | 'chord'
+  | 'interval'
+  | 'vocal'
+  | 'frequency'
+  | 'rhythm'
+  | 'progression'
+  | 'scale'
+  | 'pitch';
+
+// Modes that use generateQuestion() in audioEngine
+export type ClassicEarTrainingMode = Extract<EarTrainingMode, 'note' | 'chord' | 'interval' | 'vocal'>;
+
 export interface EarTrainingSettings {
-  mode: 'note' | 'chord' | 'interval' | 'vocal'; 
+  mode: EarTrainingMode;
   selectedNotes: NoteName[];
-  octaveRange: [number, number]; // e.g., [3, 5]
-  polyphony: number; // 1, 2, 3 for notes
+  octaveRange: [number, number];
+  polyphony: number;
   chordQualities: ChordQuality[];
-  intervalQualities: IntervalQuality[]; 
+  intervalQualities: IntervalQuality[];
 }
 
 export interface Question {
   notes: number[]; // MIDI numbers
-  answerLabel: string; // "C Major" or "C4, E4"
-  answerNames: string[]; // ["C", "E"] for checking multi-note answers
+  answerLabel: string;
+  answerNames: string[];
 }
+
+// Shared training phase machine for ear training sub-modes
+export type TrainingPhase = 'idle' | 'playing' | 'answering' | 'result';
 
 // Scale Training Types
 export enum ScaleType {
@@ -133,7 +150,7 @@ export const SCALE_INTERVALS: Record<ScaleType, number[]> = {
 export interface ProgressionDef {
   id: string;
   label: string;
-  degrees: number[][]; // each chord = array of semitone offsets from tonic
+  degrees: number[][];
   romanNumerals: string[];
 }
 
@@ -157,16 +174,16 @@ export type RhythmDifficulty = 'easy' | 'medium' | 'hard';
 export type RhythmMode = 'tap' | 'dictation';
 
 export interface RhythmCell {
-  id: string;     // 'q' | 'e' | 'dq' | 'h' | 'w' | 's' | 'qr' | 'er' | 'hr'
-  label: string;  // display symbol
-  value: number;  // fraction of a bar (quarter = 0.25)
+  id: string;
+  label: string;
+  value: number;
   isRest?: boolean;
 }
 
 export interface RhythmPattern {
-  beats: number[]; // normalized positions 0~1 within a bar
+  beats: number[];
   label: string;
-  cells?: string[]; // RhythmCell.id sequence for dictation answer
+  cells?: string[];
 }
 
 // Pitch Matching Training Types
