@@ -223,6 +223,20 @@
         100% { opacity: 1; transform: scale(1); }
       }
 
+      /* Single-shot ripple for tap-tempo feedback. */
+      @keyframes tap-flash {
+        0% { opacity: 0.55; transform: scale(0.9); }
+        100% { opacity: 0; transform: scale(1.25); }
+      }
+      .animate-tap-flash { animation: tap-flash 320ms ease-out forwards; }
+
+      /* Drum-machine step glow for the currently-playing column. */
+      @keyframes drum-step-flash {
+        0% { box-shadow: 0 0 0 0 var(--primary); }
+        100% { box-shadow: 0 0 0 6px transparent; }
+      }
+      .animate-drum-step { animation: drum-step-flash 180ms ease-out; }
+
       /* ===== BASE ===== */
       * { box-sizing: border-box; }
 

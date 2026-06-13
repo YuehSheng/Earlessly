@@ -3,7 +3,8 @@ export enum Tab {
   TUNER = 'TUNER',
   METRONOME = 'METRONOME',
   EAR_TRAINING = 'EAR_TRAINING',
-  KEYBOARD = 'KEYBOARD'
+  KEYBOARD = 'KEYBOARD',
+  DRUM = 'DRUM'
 }
 
 export enum NoteName {
@@ -200,4 +201,30 @@ export interface PitchMatchResult {
   userFreq: number;
   centsError: number;
   score: number;
+}
+
+// Drum Machine Types
+export type DrumVoice = 'kick' | 'snare' | 'closedHat' | 'openHat' | 'clap' | 'cowbell';
+
+export const DRUM_STEPS = 16;
+
+export interface DrumTrack {
+  voice: DrumVoice;
+  label: string;
+  volume: number;   // 0..1, per-track gain
+  muted: boolean;
+  steps: boolean[]; // length DRUM_STEPS
+}
+
+export interface DrumPattern {
+  bpm: number;
+  swing: number;    // 0..0.5
+  tracks: DrumTrack[];
+}
+
+export type DrumSlot = 'A' | 'B' | 'C' | 'D';
+
+export interface DrumBank {
+  active: DrumSlot;
+  slots: Record<DrumSlot, DrumPattern>;
 }

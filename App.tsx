@@ -1,10 +1,11 @@
 
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { Mic2, Activity, Ear, Music4, Sun, Moon, Volume2 } from 'lucide-react';
+import { Mic2, Activity, Ear, Music4, Drum, Sun, Moon, Volume2 } from 'lucide-react';
 import Tuner from './components/Tuner';
 import Metronome from './components/Metronome';
 import EarTraining from './components/EarTraining';
 import Keyboard from './components/Keyboard';
+import DrumMachine from './components/DrumMachine';
 import { Tab } from './types';
 import { useTheme } from './hooks/useTheme';
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: Tab.METRONOME, icon: Activity, label: '節拍' },
   { id: Tab.EAR_TRAINING, icon: Ear, label: '聽力' },
   { id: Tab.KEYBOARD, icon: Music4, label: '鍵盤' },
+  { id: Tab.DRUM, icon: Drum, label: '鼓機' },
 ] as const;
 
 const App: React.FC = () => {
@@ -125,6 +127,9 @@ const App: React.FC = () => {
           </div>
           <div className={activeTab === Tab.KEYBOARD ? 'block h-full' : 'hidden h-full'}>
             <Keyboard isActive={activeTab === Tab.KEYBOARD} volume={volume} setVolume={setVolume} />
+          </div>
+          <div className={activeTab === Tab.DRUM ? 'block h-full' : 'hidden h-full'}>
+            <DrumMachine volume={volume} />
           </div>
         </div>
       </main>

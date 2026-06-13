@@ -217,8 +217,12 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
   });
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [grid, setGrid] = useState<BeatIntensity[]>([]);
+  const [swing, setSwing] = useState(0);
+  const [tapCount, setTapCount] = useState(0);
+  const [tapFlash, setTapFlash] = useState(0); // increments per tap, used as animation key
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
+  const tapResetTimerRef = useRef<number | null>(null);
   const prevStepRef = useRef(-1);
   const lastSpeedIncreaseRef = useRef<number>(-1);
 
@@ -284,10 +288,14 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
       if (totalSteps > 0) stepTime = (60.0 / safeBpm * polyB) / totalSteps;
     }
     engineRef.current.setStepInterval(stepTime);
+    // Swing only makes sense when the underlying grid has paired subdivisions
+    // (8th or 16th). In polyrhythm mode it would just smear the math.
+    const effectiveSwing = mode === 'STANDARD' && subdivision >= 2 ? swing : 0;
+    engineRef.current.setSwing(effectiveSwing);
     engineRef.current.setParams(safeBpm, grid);
     if (isPlaying) engineRef.current.start();
     else engineRef.current.stop();
-  }, [bpm, grid, isPlaying, subdivision, mode, polyA, polyB]);
+  }, [bpm, grid, isPlaying, subdivision, mode, polyA, polyB, swing]);
 
   const togglePlay = () => {
     if (!isPlaying) {
@@ -325,10 +333,15 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
     const now = Date.now();
     const times = tapTimesRef.current;
     if (times.length > 0 && now - times[times.length - 1] > 2000) {
-      tapTimesRef.current = [now]; return;
+      tapTimesRef.current = [now];
+      setTapCount(1);
+      setTapFlash(f => f + 1);
+      return;
     }
     tapTimesRef.current.push(now);
-    if (tapTimesRef.current.length > 5) tapTimesRef.current.shift();
+    if (tapTimesRef.current.length > 8) tapTimesRef.current.shift();
+    setTapCount(tapTimesRef.current.length);
+    setTapFlash(f => f + 1);
     if (tapTimesRef.current.length > 1) {
       let sumDiffs = 0;
       for (let i = 1; i < tapTimesRef.current.length; i++) sumDiffs += (tapTimesRef.current[i] - tapTimesRef.current[i - 1]);
@@ -336,7 +349,31 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
       const newBpm = Math.round(60000 / avgDiff);
       if (newBpm >= 20 && newBpm <= 300) setBpm(newBpm);
     }
+    // Reset count display ~2.5s after the last tap so it doesn't linger forever.
+    if (tapResetTimerRef.current !== null) window.clearTimeout(tapResetTimerRef.current);
+    tapResetTimerRef.current = window.setTimeout(() => {
+      tapTimesRef.current = [];
+      setTapCount(0);
+      tapResetTimerRef.current = null;
+    }, 2500);
   };
+
+  // Spacebar = tap (when not focused on an input). Lightweight global shortcut.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      handleTap();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => () => {
+    if (tapResetTimerRef.current !== null) window.clearTimeout(tapResetTimerRef.current);
+  }, []);
 
   // Color mapping — rgb tuples remain literal because they're composed into
   // rgba(...,opacity) strings for the canvas-like beat indicators.
@@ -403,10 +440,29 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
         <div className="w-full card p-4 sm:p-5 lg:p-6 space-y-4 lg:space-y-5">
           {/* Top row: Knob | BPM | Play */}
           <div className="flex items-center justify-between">
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-2">
               <AnalogKnob value={volume} min={0} max={1} step={0.05} onChange={setVolume} label={volume === 0 ? '靜音' : '音量'} size={56} ariaLabel="節拍器音量" />
-              <button onClick={handleTap} className="btn-ghost py-1 px-2.5 text-[10px] uppercase tracking-wider active:scale-95">
-                Tap
+              <button
+                onClick={handleTap}
+                aria-label="Tap Tempo（空白鍵）"
+                className="relative w-14 h-9 rounded-lg font-extrabold text-[11px] uppercase tracking-wider cursor-pointer transition-transform active:scale-90 select-none flex items-center justify-center"
+                style={{
+                  background: tapCount > 0 ? 'var(--primary-bg)' : 'var(--input-bg)',
+                  border: `1px solid ${tapCount > 0 ? 'var(--primary)' : 'var(--bd)'}`,
+                  color: tapCount > 0 ? 'var(--primary-sub)' : 'var(--tx-sub)',
+                }}
+              >
+                <span>TAP</span>
+                {tapCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                    style={{ background: 'var(--primary)', color: 'white' }}>
+                    {tapCount}
+                  </span>
+                )}
+                {tapFlash > 0 && (
+                  <span key={tapFlash} className="absolute inset-0 rounded-lg pointer-events-none animate-tap-flash"
+                    style={{ background: 'var(--primary)' }} />
+                )}
               </button>
             </div>
             <div className="flex items-center gap-3 lg:gap-5">
@@ -431,6 +487,29 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
             <button onClick={() => setBpm(b => Math.max(20, b - 1))} className="btn-ghost p-1.5"><Minus size={14}/></button>
             <input type="range" min="30" max="250" value={bpm} onChange={(e) => setBpm(parseInt(e.target.value))} className="flex-1 h-1 cursor-pointer" />
             <button onClick={() => setBpm(b => Math.min(300, b + 1))} className="btn-ghost p-1.5"><Plus size={14}/></button>
+          </div>
+
+          {/* Swing slider — only meaningful when paired subdivisions exist */}
+          <div className="flex items-center gap-2">
+            <span className="label w-12 shrink-0">Swing</span>
+            <input
+              type="range" min="0" max="50" step="1"
+              value={Math.round(swing * 100)}
+              onChange={(e) => setSwing(parseInt(e.target.value) / 100)}
+              disabled={mode !== 'STANDARD' || subdivision < 2}
+              className="flex-1 h-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Swing"
+            />
+            <span className="text-[11px] font-mono text-tx-muted w-10 text-right">{Math.round(swing * 100)}%</span>
+            {swing > 0 && mode === 'STANDARD' && subdivision >= 2 && (
+              <button
+                onClick={() => setSwing(0)}
+                className="btn-ghost text-[10px] px-1.5 py-0.5"
+                aria-label="重置 Swing"
+              >
+                <RotateCcw size={10} />
+              </button>
+            )}
           </div>
 
           {/* Divider */}

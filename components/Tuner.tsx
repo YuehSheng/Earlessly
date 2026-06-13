@@ -9,9 +9,11 @@ const NOTE_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#',
 const HISTORY_DURATION = 6; // seconds of visible history
 const HISTORY_MAX = 360; // max stored points
 
-const DETECT_INTERVAL_MS = 80; // ~12.5fps instead of ~60fps
-const NOTE_STABILITY_THRESHOLD = 4; // need 4 consistent detections to switch note
-const EMA_ALPHA = 0.15; // lower = smoother (was 0.3)
+const DETECT_INTERVAL_MS = 60; // detection cadence (raw)
+const DISPLAY_INTERVAL_MS = 120; // throttle setTunerData to reduce visible flicker
+const MEDIAN_WINDOW = 5; // rolling median to reject single-frame anomalies
+const SEMITONE_EMA = 0.18; // EMA on semitone domain (smooth pitch + cents simultaneously)
+const SILENCE_GAP_MS = 350; // missing detections this long → drop smoothing state
 
 interface PitchPoint {
   time: number; // performance.now() ms
@@ -32,10 +34,14 @@ const Tuner: React.FC = () => {
   const rafId = useRef<number | null>(null);
   const bufferRef = useRef<Float32Array | null>(null);
   const isListeningRef = useRef(false);
-  const smoothedCentsRef = useRef(0);
-  const smoothedNoteRef = useRef<{ note: string; octave: number; count: number }>({ note: '', octave: 0, count: 0 });
   const lastDetectTimeRef = useRef(0);
+  const lastDisplayTimeRef = useRef(0);
+  const lastValidDetectRef = useRef(0);
   const rmsThresholdRef = useRef(0.03);
+  // Rolling buffer of recent raw frequencies — median rejects autocorrelate jitter.
+  const freqBufferRef = useRef<number[]>([]);
+  // Smoothed pitch lives in semitone space so cents + note + freq stay coherent.
+  const smoothedSemitoneRef = useRef<number | null>(null);
 
   // Pitch history
   const pitchHistoryRef = useRef<PitchPoint[]>([]);
@@ -77,13 +83,14 @@ const Tuner: React.FC = () => {
     setTunerData(null);
     setMicVolume(0);
     pitchHistoryRef.current = [];
+    freqBufferRef.current = [];
+    smoothedSemitoneRef.current = null;
   };
 
   const updatePitch = () => {
     if (!isListeningRef.current || !analyserRef.current || !audioRef.current || !bufferRef.current) return;
 
     const now = performance.now();
-    // Throttle detection to DETECT_INTERVAL_MS
     if (now - lastDetectTimeRef.current < DETECT_INTERVAL_MS) {
       rafId.current = requestAnimationFrame(updatePitch);
       return;
@@ -96,36 +103,58 @@ const Tuner: React.FC = () => {
     const volume = Math.sqrt(sumSquares / bufferRef.current.length);
     setMicVolume(volume);
     const frequency = autoCorrelate(bufferRef.current, audioRef.current.sampleRate, rmsThresholdRef.current);
-    if (Number.isFinite(frequency) && frequency > 20 && frequency < 5000) {
-      const raw = getNoteFromFrequency(frequency);
-      // Note stability: only switch displayed note after consistent detections
-      const noteKey = `${raw.note}${raw.octave}`;
-      const prev = smoothedNoteRef.current;
-      if (noteKey === `${prev.note}${prev.octave}`) {
-        prev.count = Math.min(prev.count + 1, 20);
-      } else {
-        prev.count--;
-        if (prev.count <= 0) {
-          smoothedNoteRef.current = { note: raw.note as string, octave: raw.octave, count: 2 };
-          smoothedCentsRef.current = raw.cents;
-        }
-      }
-      // EMA smoothing on cents to reduce jitter
-      smoothedCentsRef.current = smoothedCentsRef.current * (1 - EMA_ALPHA) + raw.cents * EMA_ALPHA;
-      const stableNote = smoothedNoteRef.current;
-      setTunerData({
-        ...raw,
-        note: (stableNote.count >= NOTE_STABILITY_THRESHOLD ? stableNote.note : raw.note) as any,
-        octave: stableNote.count >= NOTE_STABILITY_THRESHOLD ? stableNote.octave : raw.octave,
-        cents: Math.round(smoothedCentsRef.current),
-      });
 
-      // Record pitch history
-      const semitone = 12 * (Math.log(frequency / 440) / Math.log(2)) + 69;
+    // Drop smoothing state if there's been a silence gap — prevents next note
+    // from being dragged towards the previous one.
+    if (now - lastValidDetectRef.current > SILENCE_GAP_MS) {
+      freqBufferRef.current = [];
+      smoothedSemitoneRef.current = null;
+    }
+
+    if (Number.isFinite(frequency) && frequency > 20 && frequency < 5000) {
+      lastValidDetectRef.current = now;
+
+      // Rolling median filter — kills single-frame autocorrelate glitches.
+      const buf = freqBufferRef.current;
+      buf.push(frequency);
+      if (buf.length > MEDIAN_WINDOW) buf.shift();
+      const sorted = [...buf].sort((a, b) => a - b);
+      const medianFreq = sorted[Math.floor(sorted.length / 2)];
+
+      // Convert to semitone, EMA in this domain so cents track without phase reset.
+      const rawSemitone = 12 * Math.log2(medianFreq / 440) + 69;
+      const prev = smoothedSemitoneRef.current;
+      let smoothed: number;
+      if (prev === null || Math.abs(prev - rawSemitone) > 7) {
+        // First detection or an octave-jump-class change → snap, don't blend.
+        smoothed = rawSemitone;
+      } else {
+        smoothed = prev * (1 - SEMITONE_EMA) + rawSemitone * SEMITONE_EMA;
+      }
+      smoothedSemitoneRef.current = smoothed;
+
+      // Throttle visible state updates separately from detection rate.
+      if (now - lastDisplayTimeRef.current >= DISPLAY_INTERVAL_MS) {
+        lastDisplayTimeRef.current = now;
+        const midi = Math.round(smoothed);
+        const cents = Math.round((smoothed - midi) * 100);
+        const displayFreq = 440 * Math.pow(2, (smoothed - 69) / 12);
+        const noteIdx = ((midi % 12) + 12) % 12;
+        const octave = Math.floor(midi / 12) - 1;
+        setTunerData({
+          note: NOTE_LABELS[noteIdx] as any,
+          octave,
+          cents,
+          frequency: displayFreq,
+          isSilent: false,
+        });
+      }
+
+      // Pitch history uses the smoothed value too so the line is clean.
       const history = pitchHistoryRef.current;
-      history.push({ time: now, semitone });
+      history.push({ time: now, semitone: smoothed });
       if (history.length > HISTORY_MAX) history.splice(0, history.length - HISTORY_MAX);
-    } else {
+    } else if (now - lastValidDetectRef.current > SILENCE_GAP_MS) {
       setTunerData(prev => prev ? { ...prev, isSilent: true } : null);
     }
     rafId.current = requestAnimationFrame(updatePitch);

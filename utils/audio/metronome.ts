@@ -15,6 +15,9 @@ export class MetronomeEngine {
   private onStep: (step: number) => void;
   public stepInterval: number = 0.5;
   private masterGain: GainNode;
+  // Swing in [0, 0.5]. Lengthens even step intervals by (1+swing), shortens
+  // odd ones by (1-swing). 0 = straight, 1/3 ≈ triplet feel, 0.5 = dotted.
+  private swing: number = 0;
 
   constructor(onStepCallback: (step: number) => void) {
     this.ctx = getAudioContext();
@@ -31,6 +34,10 @@ export class MetronomeEngine {
 
   public setStepInterval(seconds: number) {
     this.stepInterval = Math.max(0.001, seconds);
+  }
+
+  public setSwing(swing: number) {
+    this.swing = Math.max(0, Math.min(0.5, swing));
   }
 
   public setVolume(volume: number) {
@@ -70,7 +77,13 @@ export class MetronomeEngine {
   }
 
   private nextNote() {
-    this.nextNoteTime += this.stepInterval;
+    if (this.swing > 0) {
+      // Pair adjacent steps: even index gets the long half, odd gets the short.
+      const factor = this.currentStep % 2 === 0 ? (1 + this.swing) : (1 - this.swing);
+      this.nextNoteTime += this.stepInterval * factor;
+    } else {
+      this.nextNoteTime += this.stepInterval;
+    }
     this.currentStep++;
     if (this.currentStep >= this.grid.length) this.currentStep = 0;
   }
