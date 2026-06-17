@@ -4,7 +4,7 @@ import { Play, Pause, Check, ChevronRight, Volume2, RotateCcw, Trophy } from 'lu
 import { DrumMachineEngine } from '../utils/audio/drumMachine';
 import { DRUM_VOICE_LABELS } from '../utils/audio/drums';
 import { resumeAudio } from '../utils/audio/context';
-import { DrumVoice, DRUM_STEPS } from '../types';
+import { DrumVoice, DrumMeter, DRUM_METERS, meterSteps } from '../types';
 import {
   QUIZ_LEVELS, QUIZ_BPM, QuizLevel, DrumQuestion, DrumAnswer, QuizScore,
   emptyAnswer, generateQuestion, scoreAnswer, toTracks,
@@ -18,8 +18,9 @@ type Source = 'none' | 'question' | 'answer';
 
 const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
   const [level, setLevel] = useState<QuizLevel>(1);
-  const [question, setQuestion] = useState<DrumQuestion>(() => generateQuestion(1));
-  const [answer, setAnswer] = useState<DrumAnswer>(emptyAnswer);
+  const [meter, setMeter] = useState<DrumMeter>('4/4');
+  const [question, setQuestion] = useState<DrumQuestion>(() => generateQuestion(1, '4/4'));
+  const [answer, setAnswer] = useState<DrumAnswer>(() => emptyAnswer(meterSteps('4/4')));
   const [revealed, setRevealed] = useState(false);
   const [score, setScore] = useState<QuizScore | null>(null);
   const [source, setSource] = useState<Source>('none');
@@ -50,10 +51,10 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
 
   const stopAudio = useCallback(() => { setSource('none'); setCurrentStep(-1); }, []);
 
-  const newQuestion = useCallback((lvl: QuizLevel) => {
+  const newQuestion = useCallback((lvl: QuizLevel, mtr: DrumMeter) => {
     stopAudio();
-    setQuestion(prev => generateQuestion(lvl, prev));
-    setAnswer(emptyAnswer());
+    setQuestion(prev => generateQuestion(lvl, mtr, prev));
+    setAnswer(emptyAnswer(meterSteps(mtr)));
     setRevealed(false);
     setScore(null);
   }, [stopAudio]);
@@ -61,7 +62,13 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
   const chooseLevel = (lvl: QuizLevel) => {
     if (lvl === level && !revealed) return;
     setLevel(lvl);
-    newQuestion(lvl);
+    newQuestion(lvl, meter);
+  };
+
+  const chooseMeter = (mtr: DrumMeter) => {
+    if (mtr === meter) return;
+    setMeter(mtr);
+    newQuestion(level, mtr);
   };
 
   const toggleSource = (src: Exclude<Source, 'none'>) => {
@@ -88,13 +95,35 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
     [question, answer],
   );
 
+  const steps = question.pattern[question.voices[0]].length; // 12 for 3/4, 16 for 4/4
+
   return (
     <div className="flex flex-col w-full max-w-5xl mx-auto p-3 sm:p-5 space-y-3 lg:space-y-4 overflow-y-auto h-full no-scrollbar animate-slide-up">
 
       {/* ===== Difficulty selector ===== */}
       <div className="card p-3 sm:p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="label">難度</span>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="label">難度</span>
+            <div role="group" aria-label="拍號" className="flex card-inner p-1 gap-0.5">
+              {DRUM_METERS.map(({ meter: m }) => {
+                const isActive = meter === m;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => chooseMeter(m)}
+                    aria-pressed={isActive}
+                    className="px-2.5 h-7 rounded-md text-[11px] font-extrabold font-mono transition-all cursor-pointer"
+                    style={isActive
+                      ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
+                      : { background: 'transparent', color: 'var(--tx-muted)' }}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {stats.solved > 0 && (
             <span className="text-[11px] text-tx-muted flex items-center gap-1.5">
               <Trophy size={11} /> 完美 {stats.perfect} / {stats.solved} 題
@@ -157,7 +186,7 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
           </button>
         ) : (
           <button
-            onClick={() => newQuestion(level)}
+            onClick={() => newQuestion(level, meter)}
             className="btn-primary flex items-center gap-1.5 px-4 h-11 rounded-xl text-sm font-bold animate-glow-pulse"
           >
             下一題 <ChevronRight size={16} />
@@ -200,7 +229,7 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
         <div className="min-w-[640px] space-y-1.5">
           {/* Header: beat numbers */}
           <div className="flex items-center gap-2 pl-[72px] pr-1">
-            {Array.from({ length: DRUM_STEPS }).map((_, i) => {
+            {Array.from({ length: steps }).map((_, i) => {
               const subAtBeat = i % 4 === 0;
               return (
                 <div key={i} className="flex-1 flex justify-center" style={{ marginLeft: i > 0 && i % 4 === 0 ? 6 : 0 }}>
@@ -279,7 +308,7 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
         </div>
         {revealed && (
           <button
-            onClick={() => newQuestion(level)}
+            onClick={() => newQuestion(level, meter)}
             className="btn-ghost px-2 py-1 text-[10px] flex items-center gap-1"
           >
             <RotateCcw size={10} /> 換一題
