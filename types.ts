@@ -208,8 +208,8 @@ export type DrumVoice = 'kick' | 'snare' | 'closedHat' | 'openHat' | 'clap' | 'c
 
 export const DRUM_STEPS = 16; // sixteenth-notes in a 4/4 bar (default / max grid width)
 
-// Supported time signatures. Each beat is 4 sixteenth-note steps, so the grid
-// width is beatsPerBar * 4.
+// Supported time signatures for the QUIZ (作答模式). Each beat is 4 sixteenth
+// steps, so the grid width is beatsPerBar * 4.
 export type DrumMeter = '4/4' | '3/4';
 
 export const DRUM_METERS: { meter: DrumMeter; beats: number; steps: number }[] = [
@@ -220,18 +220,37 @@ export const DRUM_METERS: { meter: DrumMeter; beats: number; steps: number }[] =
 export const meterSteps = (meter: DrumMeter): number =>
   DRUM_METERS.find(m => m.meter === meter)!.steps;
 
+// The free drum machine separates two independent axes:
+//   beatsPerBar — how many beats in one loop (拍數, e.g. 4 or 3)
+//   subdivision — how many cells sit inside ONE beat (每拍格數: 4=16分, 3=三連音)
+// Grid width = beatsPerBar * subdivision.
+export const BEATS_PER_BAR_OPTIONS: { value: number; label: string }[] = [
+  { value: 4, label: '4 拍' },
+  { value: 3, label: '3 拍' },
+];
+
+export const SUBDIVISION_OPTIONS: { value: number; label: string }[] = [
+  { value: 4, label: '16分' },     // straight sixteenths
+  { value: 3, label: '三連音' },    // triplets — 3 cells per beat
+  { value: 2, label: '8分' },      // straight eighths
+];
+
+export const grooveSteps = (beatsPerBar: number, subdivision: number): number =>
+  beatsPerBar * subdivision;
+
 export interface DrumTrack {
   voice: DrumVoice;
   label: string;
   volume: number;   // 0..1, per-track gain
   muted: boolean;
-  steps: boolean[]; // length = meterSteps(pattern.meter)
+  steps: boolean[]; // length = beatsPerBar * subdivision
 }
 
 export interface DrumPattern {
   bpm: number;
-  swing: number;    // 0..0.5
-  meter: DrumMeter; // time signature; drives step count
+  swing: number;       // 0..0.5
+  beatsPerBar: number; // 拍數
+  subdivision: number; // 每拍格數 (cells per beat)
   tracks: DrumTrack[];
 }
 

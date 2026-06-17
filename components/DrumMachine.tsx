@@ -5,7 +5,7 @@ import { DrumMachineEngine } from '../utils/audio/drumMachine';
 import DrumQuiz from './DrumQuiz';
 import { DRUM_PLAYERS, DRUM_VOICE_ORDER, DRUM_VOICE_LABELS } from '../utils/audio/drums';
 import { getAudioContext, resumeAudio } from '../utils/audio/context';
-import { DrumBank, DrumPattern, DrumSlot, DrumTrack, DrumMeter, DRUM_METERS, meterSteps, DrumVoice } from '../types';
+import { DrumBank, DrumPattern, DrumSlot, DrumTrack, BEATS_PER_BAR_OPTIONS, SUBDIVISION_OPTIONS, grooveSteps, DrumVoice } from '../types';
 
 const STORAGE_KEY = 'earlessly-drum-bank-v1';
 const SLOTS: DrumSlot[] = ['A', 'B', 'C', 'D'];
@@ -18,14 +18,15 @@ const emptyTrack = (voice: DrumVoice, steps: number): DrumTrack => ({
   steps: new Array(steps).fill(false),
 });
 
-const emptyPattern = (bpm = 110, swing = 0, meter: DrumMeter = '4/4'): DrumPattern => ({
+const emptyPattern = (bpm = 110, swing = 0, beatsPerBar = 4, subdivision = 4): DrumPattern => ({
   bpm,
   swing,
-  meter,
-  tracks: DRUM_VOICE_ORDER.map(v => emptyTrack(v, meterSteps(meter))),
+  beatsPerBar,
+  subdivision,
+  tracks: DRUM_VOICE_ORDER.map(v => emptyTrack(v, grooveSteps(beatsPerBar, subdivision))),
 });
 
-// Resize a track's steps array when the time signature changes — keep what fits.
+// Resize a track's steps array when the grid dimensions change — keep what fits.
 const resizeSteps = (steps: boolean[], len: number): boolean[] => {
   if (steps.length === len) return steps;
   const next = new Array(len).fill(false);
@@ -67,11 +68,15 @@ const loadBank = (): DrumBank => {
       const p = parsed.slots?.[slot];
       if (!p) (parsed.slots ??= {} as DrumBank['slots'])[slot] = emptyPattern();
       else {
-        // Pre-meter banks have no `meter`; infer it from the stored step count.
-        if (p.meter !== '4/4' && p.meter !== '3/4') {
-          p.meter = p.tracks?.[0]?.steps?.length === 12 ? '3/4' : '4/4';
+        // Migrate older shapes: `meter` ('4/4'/'3/4') or a bare step count.
+        if (typeof p.beatsPerBar !== 'number' || typeof p.subdivision !== 'number') {
+          const legacyMeter = (p as { meter?: string }).meter;
+          const len = p.tracks?.[0]?.steps?.length;
+          p.beatsPerBar = legacyMeter === '3/4' || len === 12 ? 3 : 4;
+          p.subdivision = 4; // everything pre-subdivision was straight sixteenths
+          delete (p as { meter?: string }).meter;
         }
-        const len = meterSteps(p.meter);
+        const len = grooveSteps(p.beatsPerBar, p.subdivision);
         const byVoice = new Map(p.tracks.map(t => [t.voice, t]));
         p.tracks = DRUM_VOICE_ORDER.map(v => byVoice.get(v) ?? emptyTrack(v, len));
         p.tracks.forEach(t => {
@@ -101,6 +106,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
   const engineRef = useRef<DrumMachineEngine | null>(null);
 
   const pattern = bank.slots[bank.active];
+  const subdivision = pattern.subdivision;
   const stepCount = pattern.tracks[0]?.steps.length ?? 16;
 
   // Persist on every change. localStorage write is cheap enough at this size (~1KB).
@@ -118,7 +124,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
 
   useEffect(() => {
     if (!engineRef.current) return;
-    engineRef.current.setParams(pattern.bpm, pattern.swing, pattern.tracks, solo);
+    engineRef.current.setParams(pattern.bpm, pattern.swing, pattern.tracks, solo, pattern.subdivision);
     if (isPlaying) engineRef.current.start();
     else engineRef.current.stop();
   }, [pattern, solo, isPlaying]);
@@ -167,13 +173,19 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
   const setBpm = (bpm: number) => updatePattern(p => ({ ...p, bpm }));
   const setSwingValue = (swing: number) => updatePattern(p => ({ ...p, swing }));
 
-  // Switching time signature resizes every track on the active pattern.
-  const setMeter = (meter: DrumMeter) => {
-    if (meter === pattern.meter) return;
-    const len = meterSteps(meter);
+  // Changing 拍數 or 每拍格數 resizes every track on the active pattern.
+  const reshape = (beatsPerBar: number, subdiv: number) => {
+    const len = grooveSteps(beatsPerBar, subdiv);
     setCurrentStep(-1);
-    updatePattern(p => ({ ...p, meter, tracks: p.tracks.map(t => ({ ...t, steps: resizeSteps(t.steps, len) })) }));
+    updatePattern(p => ({
+      ...p,
+      beatsPerBar,
+      subdivision: subdiv,
+      tracks: p.tracks.map(t => ({ ...t, steps: resizeSteps(t.steps, len) })),
+    }));
   };
+  const setBeatsPerBar = (b: number) => { if (b !== pattern.beatsPerBar) reshape(b, pattern.subdivision); };
+  const setSubdivision = (s: number) => { if (s !== pattern.subdivision) reshape(pattern.beatsPerBar, s); };
 
   const togglePlay = () => {
     if (!isPlaying) {
@@ -273,23 +285,47 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
           <span className="text-[11px] font-mono text-tx-muted w-8 text-right">{Math.round(pattern.swing * 100)}%</span>
         </div>
 
-        {/* Time signature 4/4 · 3/4 */}
+        {/* 拍數 (beats per bar) */}
         <div className="flex items-center gap-2">
-          <span className="label shrink-0">拍號</span>
-          <div role="group" aria-label="拍號" className="flex card-inner p-1 gap-0.5">
-            {DRUM_METERS.map(({ meter }) => {
-              const isActive = pattern.meter === meter;
+          <span className="label shrink-0">拍數</span>
+          <div role="group" aria-label="每小節拍數" className="flex card-inner p-1 gap-0.5">
+            {BEATS_PER_BAR_OPTIONS.map(({ value, label }) => {
+              const isActive = pattern.beatsPerBar === value;
               return (
                 <button
-                  key={meter}
-                  onClick={() => setMeter(meter)}
+                  key={value}
+                  onClick={() => setBeatsPerBar(value)}
                   aria-pressed={isActive}
-                  className="px-2.5 h-8 rounded-md text-xs font-extrabold font-mono transition-all cursor-pointer"
+                  className="px-2.5 h-8 rounded-md text-xs font-extrabold transition-all cursor-pointer"
                   style={isActive
                     ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
                     : { background: 'transparent', color: 'var(--tx-muted)' }}
                 >
-                  {meter}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 每拍格數 (subdivision) — 16分 / 三連音 / 8分 */}
+        <div className="flex items-center gap-2">
+          <span className="label shrink-0">每拍</span>
+          <div role="group" aria-label="每拍格數" className="flex card-inner p-1 gap-0.5">
+            {SUBDIVISION_OPTIONS.map(({ value, label }) => {
+              const isActive = pattern.subdivision === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setSubdivision(value)}
+                  aria-pressed={isActive}
+                  title={`每拍 ${value} 格`}
+                  className="px-2.5 h-8 rounded-md text-xs font-extrabold transition-all cursor-pointer"
+                  style={isActive
+                    ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
+                    : { background: 'transparent', color: 'var(--tx-muted)' }}
+                >
+                  {label}
                 </button>
               );
             })}
@@ -336,13 +372,13 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
           {/* Header: step numbers + beat groups. pl matches row-controls width + gap. */}
           <div className="flex items-center gap-2 pl-[200px] pr-1">
             {Array.from({ length: stepCount }).map((_, i) => {
-              const beat = Math.floor(i / 4) + 1;
-              const subAtBeat = i % 4 === 0;
+              const beat = Math.floor(i / subdivision) + 1;
+              const subAtBeat = i % subdivision === 0;
               return (
                 <div
                   key={i}
                   className="flex-1 flex flex-col items-center"
-                  style={{ marginLeft: i > 0 && i % 4 === 0 ? 6 : 0 }}
+                  style={{ marginLeft: i > 0 && i % subdivision === 0 ? 6 : 0 }}
                 >
                   <span className={`text-[9px] font-mono ${subAtBeat ? 'text-tx-sub font-bold' : 'text-tx-muted'}`}>
                     {subAtBeat ? beat : '·'}
@@ -399,7 +435,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
                 <div className="flex items-center gap-2 flex-1">
                   {track.steps.map((on, stepIdx) => {
                     const isCurrent = isPlaying && stepIdx === currentStep;
-                    const isBeatStart = stepIdx % 4 === 0;
+                    const isBeatStart = stepIdx % subdivision === 0;
                     return (
                       <button
                         key={stepIdx}

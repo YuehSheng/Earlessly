@@ -17,6 +17,7 @@ export class DrumMachineEngine {
   private currentStep = 0;
   private bpm = 120;
   private swing = 0;
+  private subdivision = 4; // cells per beat — drives step duration
   private tracks: DrumTrack[] = [];
   private masterGain: GainNode;
   private onStep: (step: number) => void;
@@ -37,12 +38,13 @@ export class DrumMachineEngine {
     this.masterGain.gain.setTargetAtTime(Math.max(0.0001, v), this.ctx.currentTime, 0.02);
   }
 
-  public setParams(bpm: number, swing: number, tracks: DrumTrack[], soloMask: boolean[]) {
+  public setParams(bpm: number, swing: number, tracks: DrumTrack[], soloMask: boolean[], subdivision = 4) {
     this.bpm = bpm;
     this.swing = Math.max(0, Math.min(0.5, swing));
     this.tracks = tracks;
     this.soloMask = soloMask;
     this.anySolo = soloMask.some(Boolean);
+    this.subdivision = subdivision;
   }
 
   public start() {
@@ -74,8 +76,8 @@ export class DrumMachineEngine {
   }
 
   private stepInterval(): number {
-    // Each step is a sixteenth-note; quarter = 60/bpm.
-    return (60 / this.bpm) / 4;
+    // One beat = 60/bpm; a beat is split into `subdivision` cells.
+    return (60 / this.bpm) / this.subdivision;
   }
 
   private advance() {
