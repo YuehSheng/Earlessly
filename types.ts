@@ -206,19 +206,32 @@ export interface PitchMatchResult {
 // Drum Machine Types
 export type DrumVoice = 'kick' | 'snare' | 'closedHat' | 'openHat' | 'clap' | 'cowbell';
 
-export const DRUM_STEPS = 16;
+export const DRUM_STEPS = 16; // sixteenth-notes in a 4/4 bar (default / max grid width)
+
+// Supported time signatures. Each beat is 4 sixteenth-note steps, so the grid
+// width is beatsPerBar * 4.
+export type DrumMeter = '4/4' | '3/4';
+
+export const DRUM_METERS: { meter: DrumMeter; beats: number; steps: number }[] = [
+  { meter: '4/4', beats: 4, steps: 16 },
+  { meter: '3/4', beats: 3, steps: 12 },
+];
+
+export const meterSteps = (meter: DrumMeter): number =>
+  DRUM_METERS.find(m => m.meter === meter)!.steps;
 
 export interface DrumTrack {
   voice: DrumVoice;
   label: string;
   volume: number;   // 0..1, per-track gain
   muted: boolean;
-  steps: boolean[]; // length DRUM_STEPS
+  steps: boolean[]; // length = meterSteps(pattern.meter)
 }
 
 export interface DrumPattern {
   bpm: number;
   swing: number;    // 0..0.5
+  meter: DrumMeter; // time signature; drives step count
   tracks: DrumTrack[];
 }
 

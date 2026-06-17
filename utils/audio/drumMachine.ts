@@ -3,6 +3,9 @@ import { getAudioContext, resumeAudio } from './context';
 import { DRUM_PLAYERS } from './drums';
 import { DrumTrack, DRUM_STEPS } from '../../types';
 
+// How many steps the current pattern spans (12 for 3/4, 16 for 4/4). Derived
+// from the live tracks so the scheduler follows the active time signature.
+
 // 16-step / 1-bar lookahead scheduler, mirrored on MetronomeEngine for accuracy.
 export class DrumMachineEngine {
   private ctx: AudioContext;
@@ -66,8 +69,12 @@ export class DrumMachineEngine {
     try { this.masterGain.disconnect(); } catch { /* already disconnected */ }
   }
 
+  private stepCount(): number {
+    return this.tracks[0]?.steps.length || DRUM_STEPS;
+  }
+
   private stepInterval(): number {
-    // 16 sixteenth-notes per bar; quarter = 60/bpm.
+    // Each step is a sixteenth-note; quarter = 60/bpm.
     return (60 / this.bpm) / 4;
   }
 
@@ -79,7 +86,7 @@ export class DrumMachineEngine {
     } else {
       this.nextStepTime += base;
     }
-    this.currentStep = (this.currentStep + 1) % DRUM_STEPS;
+    this.currentStep = (this.currentStep + 1) % this.stepCount();
   }
 
   private scheduler() {

@@ -5,24 +5,33 @@ import { DrumMachineEngine } from '../utils/audio/drumMachine';
 import DrumQuiz from './DrumQuiz';
 import { DRUM_PLAYERS, DRUM_VOICE_ORDER, DRUM_VOICE_LABELS } from '../utils/audio/drums';
 import { getAudioContext, resumeAudio } from '../utils/audio/context';
-import { DrumBank, DrumPattern, DrumSlot, DrumTrack, DRUM_STEPS, DrumVoice } from '../types';
+import { DrumBank, DrumPattern, DrumSlot, DrumTrack, DrumMeter, DRUM_METERS, meterSteps, DrumVoice } from '../types';
 
 const STORAGE_KEY = 'earlessly-drum-bank-v1';
 const SLOTS: DrumSlot[] = ['A', 'B', 'C', 'D'];
 
-const emptyTrack = (voice: DrumVoice): DrumTrack => ({
+const emptyTrack = (voice: DrumVoice, steps: number): DrumTrack => ({
   voice,
   label: DRUM_VOICE_LABELS[voice],
   volume: 0.8,
   muted: false,
-  steps: new Array(DRUM_STEPS).fill(false),
+  steps: new Array(steps).fill(false),
 });
 
-const emptyPattern = (bpm = 110, swing = 0): DrumPattern => ({
+const emptyPattern = (bpm = 110, swing = 0, meter: DrumMeter = '4/4'): DrumPattern => ({
   bpm,
   swing,
-  tracks: DRUM_VOICE_ORDER.map(emptyTrack),
+  meter,
+  tracks: DRUM_VOICE_ORDER.map(v => emptyTrack(v, meterSteps(meter))),
 });
+
+// Resize a track's steps array when the time signature changes — keep what fits.
+const resizeSteps = (steps: boolean[], len: number): boolean[] => {
+  if (steps.length === len) return steps;
+  const next = new Array(len).fill(false);
+  for (let i = 0; i < Math.min(len, steps.length); i++) next[i] = steps[i];
+  return next;
+};
 
 // Slot A ships with a basic four-on-the-floor so first-run users hear something.
 const seedPatternA = (): DrumPattern => {
@@ -58,12 +67,16 @@ const loadBank = (): DrumBank => {
       const p = parsed.slots?.[slot];
       if (!p) (parsed.slots ??= {} as DrumBank['slots'])[slot] = emptyPattern();
       else {
+        // Pre-meter banks have no `meter`; infer it from the stored step count.
+        if (p.meter !== '4/4' && p.meter !== '3/4') {
+          p.meter = p.tracks?.[0]?.steps?.length === 12 ? '3/4' : '4/4';
+        }
+        const len = meterSteps(p.meter);
         const byVoice = new Map(p.tracks.map(t => [t.voice, t]));
-        p.tracks = DRUM_VOICE_ORDER.map(v => byVoice.get(v) ?? emptyTrack(v));
+        p.tracks = DRUM_VOICE_ORDER.map(v => byVoice.get(v) ?? emptyTrack(v, len));
         p.tracks.forEach(t => {
-          if (!Array.isArray(t.steps) || t.steps.length !== DRUM_STEPS) {
-            t.steps = new Array(DRUM_STEPS).fill(false);
-          }
+          if (!Array.isArray(t.steps)) t.steps = new Array(len).fill(false);
+          else if (t.steps.length !== len) t.steps = resizeSteps(t.steps, len);
         });
       }
     });
@@ -88,6 +101,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
   const engineRef = useRef<DrumMachineEngine | null>(null);
 
   const pattern = bank.slots[bank.active];
+  const stepCount = pattern.tracks[0]?.steps.length ?? 16;
 
   // Persist on every change. localStorage write is cheap enough at this size (~1KB).
   useEffect(() => {
@@ -147,11 +161,19 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
 
   const clearPattern = () => {
     if (!window.confirm(`清空 Pattern ${bank.active}？`)) return;
-    updatePattern(p => ({ ...p, tracks: p.tracks.map(t => ({ ...t, steps: new Array(DRUM_STEPS).fill(false) })) }));
+    updatePattern(p => ({ ...p, tracks: p.tracks.map(t => ({ ...t, steps: new Array(t.steps.length).fill(false) })) }));
   };
 
   const setBpm = (bpm: number) => updatePattern(p => ({ ...p, bpm }));
   const setSwingValue = (swing: number) => updatePattern(p => ({ ...p, swing }));
+
+  // Switching time signature resizes every track on the active pattern.
+  const setMeter = (meter: DrumMeter) => {
+    if (meter === pattern.meter) return;
+    const len = meterSteps(meter);
+    setCurrentStep(-1);
+    updatePattern(p => ({ ...p, meter, tracks: p.tracks.map(t => ({ ...t, steps: resizeSteps(t.steps, len) })) }));
+  };
 
   const togglePlay = () => {
     if (!isPlaying) {
@@ -251,6 +273,29 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
           <span className="text-[11px] font-mono text-tx-muted w-8 text-right">{Math.round(pattern.swing * 100)}%</span>
         </div>
 
+        {/* Time signature 4/4 · 3/4 */}
+        <div className="flex items-center gap-2">
+          <span className="label shrink-0">拍號</span>
+          <div role="group" aria-label="拍號" className="flex card-inner p-1 gap-0.5">
+            {DRUM_METERS.map(({ meter }) => {
+              const isActive = pattern.meter === meter;
+              return (
+                <button
+                  key={meter}
+                  onClick={() => setMeter(meter)}
+                  aria-pressed={isActive}
+                  className="px-2.5 h-8 rounded-md text-xs font-extrabold font-mono transition-all cursor-pointer"
+                  style={isActive
+                    ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
+                    : { background: 'transparent', color: 'var(--tx-muted)' }}
+                >
+                  {meter}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Pattern slots A/B/C/D */}
         <div role="tablist" className="flex card-inner p-1 gap-0.5">
           {SLOTS.map(slot => {
@@ -290,7 +335,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
         <div className="min-w-[680px] space-y-1.5">
           {/* Header: step numbers + beat groups. pl matches row-controls width + gap. */}
           <div className="flex items-center gap-2 pl-[200px] pr-1">
-            {Array.from({ length: DRUM_STEPS }).map((_, i) => {
+            {Array.from({ length: stepCount }).map((_, i) => {
               const beat = Math.floor(i / 4) + 1;
               const subAtBeat = i % 4 === 0;
               return (
