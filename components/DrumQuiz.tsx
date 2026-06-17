@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Play, Pause, Check, ChevronRight, Volume2, RotateCcw, Trophy } from 'lucide-react';
+import { Play, Pause, Check, ChevronRight, Volume2, RotateCcw, Trophy, Eye, EyeOff } from 'lucide-react';
 import { DrumMachineEngine } from '../utils/audio/drumMachine';
 import { DRUM_VOICE_LABELS } from '../utils/audio/drums';
 import { resumeAudio } from '../utils/audio/context';
@@ -25,6 +25,9 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
   const [score, setScore] = useState<QuizScore | null>(null);
   const [source, setSource] = useState<Source>('none');
   const [currentStep, setCurrentStep] = useState(-1);
+  // The moving playhead can give the timing away — let users hide it. Beat 1
+  // stays framed regardless so positioning is never ambiguous.
+  const [showPlayhead, setShowPlayhead] = useState(true);
   // Session tally — light motivation, not persisted.
   const [stats, setStats] = useState({ solved: 0, perfect: 0 });
 
@@ -174,6 +177,16 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
           試聽作答
         </button>
 
+        <button
+          onClick={() => setShowPlayhead(v => !v)}
+          aria-pressed={showPlayhead}
+          title={showPlayhead ? '隱藏播放位置（防止看拍子作弊）' : '顯示播放位置'}
+          className="btn-ghost flex items-center gap-1.5 px-3 h-11 text-xs font-semibold"
+        >
+          {showPlayhead ? <Eye size={14} /> : <EyeOff size={14} />}
+          <span className="hidden sm:inline">{showPlayhead ? '顯示拍點' : '隱藏拍點'}</span>
+        </button>
+
         <div className="flex-1" />
 
         {!revealed ? (
@@ -249,7 +262,11 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
 
               <div className="flex items-center gap-2 flex-1">
                 {answer[voice].map((on, stepIdx) => {
-                  const isCurrent = source !== 'none' && stepIdx === currentStep;
+                  const playing = source !== 'none';
+                  const isCurrent = showPlayhead && playing && stepIdx === currentStep;
+                  // Beat-1 anchor: keep the downbeat framed whenever the live
+                  // playhead isn't driving, so position stays clear even hidden.
+                  const isAnchor = !revealed && stepIdx === 0 && !(showPlayhead && playing);
                   const isBeatStart = stepIdx % 4 === 0;
                   const target = question.pattern[voice][stepIdx];
 
@@ -275,6 +292,7 @@ const DrumQuiz: React.FC<DrumQuizProps> = ({ volume }) => {
                     }
                   }
 
+                  if (isAnchor) border = '2px solid var(--primary-sub)';
                   if (isCurrent) border = '2px solid var(--primary-sub)';
 
                   return (

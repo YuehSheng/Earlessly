@@ -14,6 +14,34 @@ interface EarTrainingProps { volume?: number; }
 
 const CLASSIC_MODES: ReadonlySet<EarTrainingMode> = new Set(['note', 'chord', 'interval', 'vocal']);
 
+// Grouped so the mode list reads as a few clear categories instead of a long flat row.
+const MODE_GROUPS: { label: string; modes: { id: EarTrainingMode; label: string }[] }[] = [
+  {
+    label: '音高 · 音準',
+    modes: [
+      { id: 'note', label: '聽音' },
+      { id: 'vocal', label: '視唱' },
+      { id: 'pitch', label: '音高匹配' },
+    ],
+  },
+  {
+    label: '和聲 · 調式',
+    modes: [
+      { id: 'interval', label: '音程' },
+      { id: 'chord', label: '和弦' },
+      { id: 'progression', label: '和弦進行' },
+      { id: 'scale', label: '音階' },
+    ],
+  },
+  {
+    label: '節奏 · 音響',
+    modes: [
+      { id: 'rhythm', label: '節奏' },
+      { id: 'frequency', label: '頻率 EQ' },
+    ],
+  },
+];
+
 const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const [mode, setMode] = useState<'settings' | 'game'>('settings');
   const [gameMode, setGameMode] = useState<EarTrainingMode>('note');
@@ -180,15 +208,19 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
           {/* Mode Card */}
           <div className="card p-4 sm:p-6 space-y-4 lg:flex-1">
             <h3 className="font-bold text-tx text-sm flex items-center gap-2">1. 模式</h3>
-            <div className="flex flex-wrap gap-1.5 p-1 card-inner lg:grid lg:grid-cols-4">
-              {(['note', 'interval', 'chord', 'vocal', 'frequency', 'rhythm', 'progression', 'scale', 'pitch'] as const).map(m => {
-                const labels: Record<string, string> = { note: '聽音', interval: '音程', chord: '和弦', vocal: '視唱', frequency: '頻率 EQ', rhythm: '節奏', progression: '進行', scale: '音階', pitch: '音高匹配' };
-                return (
-                  <button key={m} onClick={() => setGameMode(m)} className={`flex-1 py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${gameMode === m ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={gameMode === m ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
-                    {labels[m]}
-                  </button>
-                );
-              })}
+            <div className="space-y-3">
+              {MODE_GROUPS.map(group => (
+                <div key={group.label} className="space-y-1.5">
+                  <div className="label text-[9px]">{group.label}</div>
+                  <div className="grid grid-cols-3 gap-1.5 p-1 card-inner">
+                    {group.modes.map(m => (
+                      <button key={m.id} onClick={() => setGameMode(m.id)} className={`py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${gameMode === m.id ? 'text-primary-sub' : 'text-tx-muted hover:text-tx-sub'}`} style={gameMode === m.id ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)' } : {}}>
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {gameMode === 'note' && (
