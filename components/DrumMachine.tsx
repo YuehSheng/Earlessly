@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Play, Pause, RotateCcw, Volume2, Trash2, Headphones } from 'lucide-react';
+import { Play, Pause, RotateCcw, Volume2, Trash2, Headphones, Sliders, GraduationCap } from 'lucide-react';
 import { DrumMachineEngine } from '../utils/audio/drumMachine';
+import DrumQuiz from './DrumQuiz';
 import { DRUM_PLAYERS, DRUM_VOICE_ORDER, DRUM_VOICE_LABELS } from '../utils/audio/drums';
 import { getAudioContext, resumeAudio } from '../utils/audio/context';
 import { DrumBank, DrumPattern, DrumSlot, DrumTrack, DRUM_STEPS, DrumVoice } from '../types';
@@ -78,6 +79,7 @@ interface DrumMachineProps {
 }
 
 const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
+  const [studioMode, setStudioMode] = useState<'free' | 'quiz'>('free');
   const [bank, setBank] = useState<DrumBank>(loadBank);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
@@ -174,7 +176,42 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
 
   const anySolo = useMemo(() => solo.some(Boolean), [solo]);
 
+  const switchMode = (m: 'free' | 'quiz') => {
+    if (m === studioMode) return;
+    if (m === 'quiz') setIsPlaying(false); // hand the speakers over to the quiz engine
+    setStudioMode(m);
+  };
+
+  // Segmented control shared by both modes.
+  const modeBar = (
+    <div className="max-w-5xl mx-auto w-full px-3 sm:px-5 pt-3">
+      <div role="tablist" className="card-inner p-1 flex gap-1 w-fit">
+        {([['free', '自由', Sliders], ['quiz', '作答', GraduationCap]] as const).map(([m, label, Icon]) => {
+          const active = studioMode === m;
+          return (
+            <button
+              key={m}
+              role="tab"
+              aria-selected={active}
+              onClick={() => switchMode(m)}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5"
+              style={active
+                ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
+                : { background: 'transparent', color: 'var(--tx-muted)' }}
+            >
+              <Icon size={13} /> {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
+    <div className="flex flex-col h-full">
+      {modeBar}
+      <div className="flex-1 min-h-0">
+        {studioMode === 'quiz' ? <DrumQuiz volume={volume} /> : (
     <div className="flex flex-col w-full max-w-5xl mx-auto p-3 sm:p-5 space-y-3 lg:space-y-4 overflow-y-auto h-full no-scrollbar animate-slide-up">
 
       {/* ===== Transport bar ===== */}
@@ -369,6 +406,9 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
       </div>
 
       <div className="h-4 w-full shrink-0"></div>
+    </div>
+        )}
+      </div>
     </div>
   );
 };
