@@ -17,7 +17,9 @@ export class DrumMachineEngine {
   private currentStep = 0;
   private bpm = 120;
   private swing = 0;
-  private subdivision = 4; // cells per beat — drives step duration
+  // Per-step subdivision lookup (cells-per-beat for the beat each step sits in),
+  // so step duration follows mixed subdivisions across the bar.
+  private stepSubdiv: number[] = [];
   private tracks: DrumTrack[] = [];
   private masterGain: GainNode;
   private onStep: (step: number) => void;
@@ -38,13 +40,22 @@ export class DrumMachineEngine {
     this.masterGain.gain.setTargetAtTime(Math.max(0.0001, v), this.ctx.currentTime, 0.02);
   }
 
-  public setParams(bpm: number, swing: number, tracks: DrumTrack[], soloMask: boolean[], subdivision = 4) {
+  public setParams(bpm: number, swing: number, tracks: DrumTrack[], soloMask: boolean[], subdivisions: number[] = []) {
     this.bpm = bpm;
     this.swing = Math.max(0, Math.min(0.5, swing));
     this.tracks = tracks;
     this.soloMask = soloMask;
     this.anySolo = soloMask.some(Boolean);
-    this.subdivision = subdivision;
+    this.stepSubdiv = this.buildStepSubdiv(subdivisions, tracks[0]?.steps.length ?? 16);
+  }
+
+  // Expand per-beat subdivisions into a per-step array. Falls back to a uniform
+  // 4 (straight sixteenths) when no layout is supplied (e.g. the quiz engine).
+  private buildStepSubdiv(subdivisions: number[], total: number): number[] {
+    if (!subdivisions.length) return new Array(total).fill(4);
+    const arr: number[] = [];
+    subdivisions.forEach(s => { for (let k = 0; k < s; k++) arr.push(s); });
+    return arr;
   }
 
   public start() {
@@ -76,8 +87,9 @@ export class DrumMachineEngine {
   }
 
   private stepInterval(): number {
-    // One beat = 60/bpm; a beat is split into `subdivision` cells.
-    return (60 / this.bpm) / this.subdivision;
+    // One beat = 60/bpm; the current step's beat is split into N cells.
+    const sub = this.stepSubdiv[this.currentStep] ?? 4;
+    return (60 / this.bpm) / sub;
   }
 
   private advance() {

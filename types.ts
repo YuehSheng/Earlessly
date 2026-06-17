@@ -220,37 +220,49 @@ export const DRUM_METERS: { meter: DrumMeter; beats: number; steps: number }[] =
 export const meterSteps = (meter: DrumMeter): number =>
   DRUM_METERS.find(m => m.meter === meter)!.steps;
 
-// The free drum machine separates two independent axes:
-//   beatsPerBar — how many beats in one loop (拍數, e.g. 4 or 3)
-//   subdivision — how many cells sit inside ONE beat (每拍格數: 4=16分, 3=三連音)
-// Grid width = beatsPerBar * subdivision.
+// The free drum machine lets every beat carry its OWN subdivision, so a bar can
+// mix e.g. 16ths on beat 1 and a triplet on beat 2.
+//   subdivisions — one entry per beat = how many cells that beat holds
+// Grid width = sum(subdivisions); beats per bar = subdivisions.length.
 export const BEATS_PER_BAR_OPTIONS: { value: number; label: string }[] = [
-  { value: 4, label: '4 拍' },
+  { value: 2, label: '2 拍' },
   { value: 3, label: '3 拍' },
+  { value: 4, label: '4 拍' },
 ];
 
+// Choices offered when cycling/picking a single beat's subdivision.
 export const SUBDIVISION_OPTIONS: { value: number; label: string }[] = [
   { value: 4, label: '16分' },     // straight sixteenths
-  { value: 3, label: '三連音' },    // triplets — 3 cells per beat
+  { value: 3, label: '三連音' },    // triplet — 3 cells per beat
   { value: 2, label: '8分' },      // straight eighths
 ];
 
-export const grooveSteps = (beatsPerBar: number, subdivision: number): number =>
-  beatsPerBar * subdivision;
+export const subLabel = (sub: number): string =>
+  SUBDIVISION_OPTIONS.find(o => o.value === sub)?.label ?? `${sub}格`;
+
+export const grooveStepCount = (subdivisions: number[]): number =>
+  subdivisions.reduce((a, b) => a + b, 0);
+
+// Start step index of each beat, e.g. [4,3,4] -> [0,4,7].
+export const beatOffsets = (subdivisions: number[]): number[] => {
+  const offs: number[] = [];
+  let acc = 0;
+  for (const s of subdivisions) { offs.push(acc); acc += s; }
+  return offs;
+};
 
 export interface DrumTrack {
   voice: DrumVoice;
   label: string;
   volume: number;   // 0..1, per-track gain
   muted: boolean;
-  steps: boolean[]; // length = beatsPerBar * subdivision
+  steps: boolean[]; // length = sum(subdivisions)
 }
 
 export interface DrumPattern {
   bpm: number;
-  swing: number;       // 0..0.5
-  beatsPerBar: number; // 拍數
-  subdivision: number; // 每拍格數 (cells per beat)
+  swing: number;          // 0..0.5
+  subdivisions: number[]; // per-beat cell counts; length = beats per bar
   tracks: DrumTrack[];
 }
 

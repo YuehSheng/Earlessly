@@ -5,7 +5,7 @@ import { DrumMachineEngine } from '../utils/audio/drumMachine';
 import DrumQuiz from './DrumQuiz';
 import { DRUM_PLAYERS, DRUM_VOICE_ORDER, DRUM_VOICE_LABELS } from '../utils/audio/drums';
 import { getAudioContext, resumeAudio } from '../utils/audio/context';
-import { DrumBank, DrumPattern, DrumSlot, DrumTrack, BEATS_PER_BAR_OPTIONS, SUBDIVISION_OPTIONS, grooveSteps, DrumVoice } from '../types';
+import { DrumBank, DrumPattern, DrumSlot, DrumTrack, BEATS_PER_BAR_OPTIONS, SUBDIVISION_OPTIONS, grooveStepCount, beatOffsets, subLabel, DrumVoice } from '../types';
 
 const STORAGE_KEY = 'earlessly-drum-bank-v1';
 const SLOTS: DrumSlot[] = ['A', 'B', 'C', 'D'];
@@ -18,20 +18,28 @@ const emptyTrack = (voice: DrumVoice, steps: number): DrumTrack => ({
   steps: new Array(steps).fill(false),
 });
 
-const emptyPattern = (bpm = 110, swing = 0, beatsPerBar = 4, subdivision = 4): DrumPattern => ({
-  bpm,
-  swing,
-  beatsPerBar,
-  subdivision,
-  tracks: DRUM_VOICE_ORDER.map(v => emptyTrack(v, grooveSteps(beatsPerBar, subdivision))),
-});
+const emptyPattern = (bpm = 110, swing = 0, beatsPerBar = 4, subdivision = 4): DrumPattern => {
+  const subdivisions = new Array(beatsPerBar).fill(subdivision);
+  return {
+    bpm,
+    swing,
+    subdivisions,
+    tracks: DRUM_VOICE_ORDER.map(v => emptyTrack(v, grooveStepCount(subdivisions))),
+  };
+};
 
-// Resize a track's steps array when the grid dimensions change — keep what fits.
-const resizeSteps = (steps: boolean[], len: number): boolean[] => {
-  if (steps.length === len) return steps;
-  const next = new Array(len).fill(false);
-  for (let i = 0; i < Math.min(len, steps.length); i++) next[i] = steps[i];
-  return next;
+// Resize a track's steps array beat-by-beat: keep each beat's existing hits where
+// the cell still exists, fill the rest with rests. Handles changing one beat's
+// subdivision as well as adding/removing whole beats.
+const reshapeTrackSteps = (steps: boolean[], oldSubs: number[], newSubs: number[]): boolean[] => {
+  const oldOff = beatOffsets(oldSubs);
+  const out: boolean[] = [];
+  newSubs.forEach((ns, b) => {
+    const os = oldSubs[b] ?? 0;
+    const start = oldOff[b] ?? 0;
+    for (let k = 0; k < ns; k++) out.push(k < os ? (steps[start + k] ?? false) : false);
+  });
+  return out;
 };
 
 // Slot A ships with a basic four-on-the-floor so first-run users hear something.
@@ -68,20 +76,27 @@ const loadBank = (): DrumBank => {
       const p = parsed.slots?.[slot];
       if (!p) (parsed.slots ??= {} as DrumBank['slots'])[slot] = emptyPattern();
       else {
-        // Migrate older shapes: `meter` ('4/4'/'3/4') or a bare step count.
-        if (typeof p.beatsPerBar !== 'number' || typeof p.subdivision !== 'number') {
-          const legacyMeter = (p as { meter?: string }).meter;
-          const len = p.tracks?.[0]?.steps?.length;
-          p.beatsPerBar = legacyMeter === '3/4' || len === 12 ? 3 : 4;
-          p.subdivision = 4; // everything pre-subdivision was straight sixteenths
-          delete (p as { meter?: string }).meter;
+        // Migrate older shapes into `subdivisions[]`: a uniform {beatsPerBar,
+        // subdivision} pair, a `meter` string, or just a bare step count.
+        if (!Array.isArray(p.subdivisions)) {
+          const anyP = p as { beatsPerBar?: number; subdivision?: number; meter?: string };
+          if (typeof anyP.beatsPerBar === 'number' && typeof anyP.subdivision === 'number') {
+            p.subdivisions = new Array(anyP.beatsPerBar).fill(anyP.subdivision);
+          } else {
+            const len = p.tracks?.[0]?.steps?.length;
+            const beats = anyP.meter === '3/4' || len === 12 ? 3 : 4;
+            p.subdivisions = new Array(beats).fill(4);
+          }
+          delete anyP.beatsPerBar; delete anyP.subdivision; delete anyP.meter;
         }
-        const len = grooveSteps(p.beatsPerBar, p.subdivision);
+        const len = grooveStepCount(p.subdivisions);
         const byVoice = new Map(p.tracks.map(t => [t.voice, t]));
         p.tracks = DRUM_VOICE_ORDER.map(v => byVoice.get(v) ?? emptyTrack(v, len));
         p.tracks.forEach(t => {
-          if (!Array.isArray(t.steps)) t.steps = new Array(len).fill(false);
-          else if (t.steps.length !== len) t.steps = resizeSteps(t.steps, len);
+          if (!Array.isArray(t.steps) || t.steps.length !== len) {
+            const base = Array.isArray(t.steps) ? t.steps : [];
+            t.steps = Array.from({ length: len }, (_, i) => base[i] ?? false);
+          }
         });
       }
     });
@@ -106,8 +121,9 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
   const engineRef = useRef<DrumMachineEngine | null>(null);
 
   const pattern = bank.slots[bank.active];
-  const subdivision = pattern.subdivision;
-  const stepCount = pattern.tracks[0]?.steps.length ?? 16;
+  const subdivisions = pattern.subdivisions;
+  // Start step index of each beat, for grouping the grid by beat.
+  const offsets = useMemo(() => beatOffsets(subdivisions), [subdivisions]);
 
   // Persist on every change. localStorage write is cheap enough at this size (~1KB).
   useEffect(() => {
@@ -124,7 +140,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
 
   useEffect(() => {
     if (!engineRef.current) return;
-    engineRef.current.setParams(pattern.bpm, pattern.swing, pattern.tracks, solo, pattern.subdivision);
+    engineRef.current.setParams(pattern.bpm, pattern.swing, pattern.tracks, solo, pattern.subdivisions);
     if (isPlaying) engineRef.current.start();
     else engineRef.current.stop();
   }, [pattern, solo, isPlaying]);
@@ -173,19 +189,33 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
   const setBpm = (bpm: number) => updatePattern(p => ({ ...p, bpm }));
   const setSwingValue = (swing: number) => updatePattern(p => ({ ...p, swing }));
 
-  // Changing 拍數 or 每拍格數 resizes every track on the active pattern.
-  const reshape = (beatsPerBar: number, subdiv: number) => {
-    const len = grooveSteps(beatsPerBar, subdiv);
+  // Apply a new per-beat subdivision layout, remapping every track beat-by-beat.
+  const reshape = (newSubs: number[]) => {
     setCurrentStep(-1);
     updatePattern(p => ({
       ...p,
-      beatsPerBar,
-      subdivision: subdiv,
-      tracks: p.tracks.map(t => ({ ...t, steps: resizeSteps(t.steps, len) })),
+      subdivisions: newSubs,
+      tracks: p.tracks.map(t => ({ ...t, steps: reshapeTrackSteps(t.steps, p.subdivisions, newSubs) })),
     }));
   };
-  const setBeatsPerBar = (b: number) => { if (b !== pattern.beatsPerBar) reshape(b, pattern.subdivision); };
-  const setSubdivision = (s: number) => { if (s !== pattern.subdivision) reshape(pattern.beatsPerBar, s); };
+
+  // 拍數: grow/shrink the beat list, keeping existing beats; new beats default to 16ths.
+  const setBeatsPerBar = (beats: number) => {
+    if (beats === subdivisions.length) return;
+    reshape(Array.from({ length: beats }, (_, i) => subdivisions[i] ?? 4));
+  };
+
+  // Set one beat's subdivision (per-beat freedom: e.g. beat 1 = 16分, beat 2 = 三連音).
+  const setBeatSubdivision = (beatIdx: number, sub: number) => {
+    if (subdivisions[beatIdx] === sub) return;
+    reshape(subdivisions.map((s, i) => (i === beatIdx ? sub : s)));
+  };
+  // Click a beat header to cycle its subdivision through the offered options.
+  const cycleBeatSubdivision = (beatIdx: number) => {
+    const order = SUBDIVISION_OPTIONS.map(o => o.value);
+    const next = order[(order.indexOf(subdivisions[beatIdx]) + 1) % order.length];
+    setBeatSubdivision(beatIdx, next);
+  };
 
   const togglePlay = () => {
     if (!isPlaying) {
@@ -290,36 +320,12 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
           <span className="label shrink-0">拍數</span>
           <div role="group" aria-label="每小節拍數" className="flex card-inner p-1 gap-0.5">
             {BEATS_PER_BAR_OPTIONS.map(({ value, label }) => {
-              const isActive = pattern.beatsPerBar === value;
+              const isActive = subdivisions.length === value;
               return (
                 <button
                   key={value}
                   onClick={() => setBeatsPerBar(value)}
                   aria-pressed={isActive}
-                  className="px-2.5 h-8 rounded-md text-xs font-extrabold transition-all cursor-pointer"
-                  style={isActive
-                    ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
-                    : { background: 'transparent', color: 'var(--tx-muted)' }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 每拍格數 (subdivision) — 16分 / 三連音 / 8分 */}
-        <div className="flex items-center gap-2">
-          <span className="label shrink-0">每拍</span>
-          <div role="group" aria-label="每拍格數" className="flex card-inner p-1 gap-0.5">
-            {SUBDIVISION_OPTIONS.map(({ value, label }) => {
-              const isActive = pattern.subdivision === value;
-              return (
-                <button
-                  key={value}
-                  onClick={() => setSubdivision(value)}
-                  aria-pressed={isActive}
-                  title={`每拍 ${value} 格`}
                   className="px-2.5 h-8 rounded-md text-xs font-extrabold transition-all cursor-pointer"
                   style={isActive
                     ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
@@ -369,23 +375,21 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
       {/* ===== Step grid ===== */}
       <div className="card p-2 sm:p-3 overflow-x-auto">
         <div className="min-w-[680px] space-y-1.5">
-          {/* Header: step numbers + beat groups. pl matches row-controls width + gap. */}
+          {/* Header: one control per beat. Click to cycle that beat's subdivision. */}
           <div className="flex items-center gap-2 pl-[200px] pr-1">
-            {Array.from({ length: stepCount }).map((_, i) => {
-              const beat = Math.floor(i / subdivision) + 1;
-              const subAtBeat = i % subdivision === 0;
-              return (
-                <div
-                  key={i}
-                  className="flex-1 flex flex-col items-center"
-                  style={{ marginLeft: i > 0 && i % subdivision === 0 ? 6 : 0 }}
+            {subdivisions.map((sub, b) => (
+              <div key={b} className="flex flex-col items-stretch" style={{ flex: sub, marginLeft: b > 0 ? 6 : 0 }}>
+                <button
+                  onClick={() => cycleBeatSubdivision(b)}
+                  title={`第 ${b + 1} 拍：${subLabel(sub)}（點擊切換格數）`}
+                  className="w-full flex items-center justify-center gap-1 rounded-md py-1 text-[9px] font-bold transition-colors cursor-pointer hover:border-primary"
+                  style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)' }}
                 >
-                  <span className={`text-[9px] font-mono ${subAtBeat ? 'text-tx-sub font-bold' : 'text-tx-muted'}`}>
-                    {subAtBeat ? beat : '·'}
-                  </span>
-                </div>
-              );
-            })}
+                  <span className="text-tx-muted font-mono">{b + 1}</span>
+                  <span className="text-primary-sub">{subLabel(sub)}</span>
+                </button>
+              </div>
+            ))}
           </div>
 
           {pattern.tracks.map((track, trackIdx) => {
@@ -431,35 +435,40 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
                   />
                 </div>
 
-                {/* Steps */}
+                {/* Steps — grouped per beat so each beat keeps its own subdivision. */}
                 <div className="flex items-center gap-2 flex-1">
-                  {track.steps.map((on, stepIdx) => {
-                    const isCurrent = isPlaying && stepIdx === currentStep;
-                    const isBeatStart = stepIdx % subdivision === 0;
-                    return (
-                      <button
-                        key={stepIdx}
-                        onClick={() => toggleStep(trackIdx, stepIdx)}
-                        aria-pressed={on}
-                        aria-label={`${track.label} step ${stepIdx + 1}`}
-                        className="flex-1 h-8 rounded-md transition-all cursor-pointer select-none relative"
-                        style={{
-                          marginLeft: isBeatStart && stepIdx > 0 ? 6 : 0,
-                          background: on
-                            ? isMuted ? 'var(--bg-active)' : 'var(--primary)'
-                            : isBeatStart ? 'var(--input-bg)' : 'var(--bg-hover)',
-                          border: isCurrent
-                            ? '2px solid var(--primary-sub)'
-                            : on
-                              ? '1px solid var(--primary)'
-                              : `1px solid ${isBeatStart ? 'var(--bd)' : 'transparent'}`,
-                          opacity: isMuted && on ? 0.45 : 1,
-                          transform: isCurrent ? 'scaleY(1.1)' : 'scaleY(1)',
-                          boxShadow: isCurrent && on ? '0 0 12px var(--primary)' : 'none',
-                        }}
-                      />
-                    );
-                  })}
+                  {subdivisions.map((sub, b) => (
+                    <div key={b} className="flex items-center gap-2" style={{ flex: sub, marginLeft: b > 0 ? 6 : 0 }}>
+                      {Array.from({ length: sub }).map((_, k) => {
+                        const stepIdx = offsets[b] + k;
+                        const on = track.steps[stepIdx];
+                        const isCurrent = isPlaying && stepIdx === currentStep;
+                        const isBeatStart = k === 0;
+                        return (
+                          <button
+                            key={stepIdx}
+                            onClick={() => toggleStep(trackIdx, stepIdx)}
+                            aria-pressed={on}
+                            aria-label={`${track.label} 第${b + 1}拍 step ${k + 1}`}
+                            className="flex-1 h-8 rounded-md transition-all cursor-pointer select-none relative"
+                            style={{
+                              background: on
+                                ? isMuted ? 'var(--bg-active)' : 'var(--primary)'
+                                : isBeatStart ? 'var(--input-bg)' : 'var(--bg-hover)',
+                              border: isCurrent
+                                ? '2px solid var(--primary-sub)'
+                                : on
+                                  ? '1px solid var(--primary)'
+                                  : `1px solid ${isBeatStart ? 'var(--bd)' : 'transparent'}`,
+                              opacity: isMuted && on ? 0.45 : 1,
+                              transform: isCurrent ? 'scaleY(1.1)' : 'scaleY(1)',
+                              boxShadow: isCurrent && on ? '0 0 12px var(--primary)' : 'none',
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -473,7 +482,7 @@ const DrumMachine: React.FC<DrumMachineProps> = ({ volume }) => {
           <Headphones size={11} /> 點軌道名試聽 · M 靜音 / S 獨奏
         </div>
         <div className="flex items-center gap-1.5">
-          <Volume2 size={11} /> 全域音量在頁首調整
+          點各拍標頭可切換該拍格數（16分 / 三連音 / 8分）
         </div>
         <button
           onClick={() => updatePattern(p => ({
