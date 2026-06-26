@@ -33,8 +33,10 @@ const StatusBar: React.FC<Props> = ({ tone, icon, children }) => {
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className="mb-5 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm min-h-10"
-      style={{ background, border }}
+      style={{ background: bg, border }}
     >
       {icon ?? defaultDot}
       <span style={{ color }}>{children}</span>

@@ -505,6 +505,10 @@ const Tuner: React.FC = () => {
           <div className="label">音高歷史</div>
           <canvas
             ref={historyCanvasRef}
+            role="img"
+            aria-label={tunerData
+              ? `音高歷史圖。目前 ${tunerData.note}${tunerData.octave}，偏差 ${tunerData.cents > 0 ? '+' : ''}${tunerData.cents} 音分`
+              : '音高歷史圖，目前無偵測到音高'}
             className="w-full rounded-lg"
             style={{ height: 160, background: 'var(--bg-hover)' }}
           />

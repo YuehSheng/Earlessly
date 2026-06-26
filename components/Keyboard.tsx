@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { PolySynth, NOTE_STRINGS } from '../utils/audioEngine';
-import { Minus, Plus, Music, Zap, Infinity, Trash2, Hourglass, Play, CheckCircle2, RotateCcw, Trophy, Lightbulb, Settings2, Clock } from 'lucide-react';
-import { ChordQuality } from '../types';
+import { Minus, Plus, Music, Zap, Infinity, Trash2, Hourglass, Play, CheckCircle2, RotateCcw, Trophy, Lightbulb, Settings2, Clock, Lock } from 'lucide-react';
+import { ChordQuality, ScaleType, SCALE_INTERVALS } from '../types';
 import { clamp } from '../utils/math';
 
 // Reference sizes at desktop. The piano keys scale-down from these via
@@ -30,9 +30,9 @@ const PIANO_KEYS = [
   { note: 'B',  type: 'white', offset: 11, chordType: 'd', wIndex: 6,  label: 'M' },
   // offset 12–16：Z排延伸（, K . L /）與 Q排起點（Q 2 W 3 E）重疊
   { note: 'C',  type: 'white', offset: 12, chordType: 'M', wIndex: 7,  label: 'Q/,' },
-  { note: 'C#', type: 'black', offset: 13, posIndex: 8,                label: '2/K' },
+  { note: 'C#', type: 'black', offset: 13, posIndex: 8,                label: '2/L' },
   { note: 'D',  type: 'white', offset: 14, chordType: 'm', wIndex: 8,  label: 'W/.' },
-  { note: 'D#', type: 'black', offset: 15, posIndex: 9,                label: '3/L' },
+  { note: 'D#', type: 'black', offset: 15, posIndex: 9,                label: '3/;' },
   { note: 'E',  type: 'white', offset: 16, chordType: 'm', wIndex: 9,  label: 'E//' },
   { note: 'F',  type: 'white', offset: 17, chordType: 'M', wIndex: 10, label: 'R' },
   { note: 'F#', type: 'black', offset: 18, posIndex: 11,               label: '5' },
@@ -52,7 +52,7 @@ const PIANO_KEYS = [
 // 鍵盤輸入映射：允許多個按鍵對應同一 offset（Z排延伸與Q排起點重疊）
 const KEY_BINDINGS = [
   // Z排 下音域（offset 0–16，約 1.5 個八度）
-  // 白鍵：Z X C V B N M , . /    黑鍵：S D G H J K L
+  // 白鍵：Z X C V B N M , . /    黑鍵：S D G H J L ;
   { keyBind: 'z', offset: 0,  chordType: 'M' },
   { keyBind: 's', offset: 1  },
   { keyBind: 'x', offset: 2,  chordType: 'm' },
@@ -66,9 +66,9 @@ const KEY_BINDINGS = [
   { keyBind: 'j', offset: 10 },
   { keyBind: 'm', offset: 11, chordType: 'd' },
   { keyBind: ',', offset: 12, chordType: 'M' }, // Z排延伸
-  { keyBind: 'k', offset: 13 },
+  { keyBind: 'l', offset: 13 },
   { keyBind: '.', offset: 14, chordType: 'm' },
-  { keyBind: 'l', offset: 15 },
+  { keyBind: ';', offset: 15 },
   { keyBind: '/', offset: 16, chordType: 'm' },
   // Q排 上音域（offset 12–28，約 1.5 個八度，12–16 與 Z排延伸重疊）
   // 白鍵：Q W E R T Y U I O P    黑鍵：2 3 5 6 7 8 9
@@ -102,6 +102,9 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
   const [isSmartChord, setIsSmartChord] = useState(false);
   const [isSustain, setIsSustain] = useState(false);
   const [isDecayMode, setIsDecayMode] = useState(true);
+  const [scaleLockOn, setScaleLockOn] = useState(false);
+  const [scaleRoot, setScaleRoot] = useState(0); // 0=C … 11=B（絕對音級）
+  const [scaleType, setScaleType] = useState<ScaleType>(ScaleType.MAJOR);
   const synthRef = useRef<PolySynth | null>(null);
   const [mouseSelection, setMouseSelection] = useState<Set<number>>(new Set());
   const [showResults, setShowResults] = useState(false);
@@ -117,14 +120,34 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
   const [timeLeft, setTimeLeft] = useState(10);
   const [correctChordNotes, setCorrectChordNotes] = useState<number[]>([]);
   const timerRef = useRef<number | null>(null);
+  const playbackTimersRef = useRef<number[]>([]);
   const isAdvancingRef = useRef(false);
   const cooldownRef = useRef(false);
+
+  // 清除所有排程中的音符播放/停止 timer，避免卸載或重置後在背景觸發（記憶體洩漏）。
+  const clearPlaybackTimers = () => {
+    playbackTimersRef.current.forEach((t: number) => clearTimeout(t));
+    playbackTimersRef.current = [];
+  };
+
+  // 依序播放一串音符，並為每個音排程對應的 stop()，所有 timer 皆追蹤以便清理。
+  const scheduleNotePlayback = (notes: number[], gap = 500, hold = 1000) => {
+    clearPlaybackTimers();
+    notes.forEach((m, i) => {
+      const playId = window.setTimeout(() => {
+        synthRef.current?.play(m);
+        const stopId = window.setTimeout(() => synthRef.current?.stop(m), hold);
+        playbackTimersRef.current.push(stopId);
+      }, i * gap);
+      playbackTimersRef.current.push(playId);
+    });
+  };
 
   useEffect(() => {
     synthRef.current = new PolySynth();
     const stored = localStorage.getItem('chord_quiz_high_score');
     if (stored) setHighScore(parseInt(stored));
-    return () => { synthRef.current?.stopAll(); if (timerRef.current) clearInterval(timerRef.current); };
+    return () => { synthRef.current?.stopAll(); clearPlaybackTimers(); if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
   useEffect(() => { if (synthRef.current) { synthRef.current.setVolume(volume); synthRef.current.decayMode = isDecayMode; } }, [volume, isDecayMode]);
@@ -133,8 +156,21 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
   const getMidiNote = (offset: number) => 60 + offset + transpose;
   const getNoteLabel = (offset: number) => { const midi = getMidiNote(offset); return NOTE_STRINGS[((midi % 12) + 12) % 12]; };
 
+  // 音階鎖定：依根音 + 音階類型算出合法音級集合（pitch class 0–11）。
+  const scalePitchClasses = useMemo(
+    () => new Set(SCALE_INTERVALS[scaleType].map((i: number) => (scaleRoot + i) % 12)),
+    [scaleRoot, scaleType]
+  );
+  const isInScale = (offset: number) => {
+    const pc = ((getMidiNote(offset) % 12) + 12) % 12;
+    return scalePitchClasses.has(pc);
+  };
+  // 鎖定開啟且該鍵不在音階內 → 視為禁用（淡化且不發聲）。
+  const isLockedOut = (offset: number) => scaleLockOn && !isInScale(offset);
+
   const fullReset = (hardReset: boolean = false) => {
     synthRef.current?.stopAll();
+    clearPlaybackTimers();
     if (hardReset) setActiveKeys(new Set());
     setMouseSelection(new Set()); setShowResults(false); setTrainingActive(false); setQuizActive(false); setTargetMidiNotes([]); setCorrectChordNotes([]);
     isAdvancingRef.current = false; cooldownRef.current = false;
@@ -179,6 +215,8 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
   };
 
   const handleNoteStart = (keyBind: string, offset: number, chordType?: string, isKeyboard: boolean = false) => {
+    // 音階鎖定：非音階內的音不發聲（QWERTY 與滑鼠/觸控皆適用）。
+    if (isLockedOut(offset)) return;
     if (isSustain && isKeyboard) {
       if (activeKeys.has(keyBind)) handleNoteStopDirect(keyBind, offset, chordType, true);
       else { setActiveKeys(prev => new Set(prev).add(keyBind)); playInternal(offset, chordType, isKeyboard); }
@@ -215,7 +253,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
       notes.push(r);
     }
     setTargetMidiNotes(notes); setTrainingActive(true);
-    notes.forEach((m, i) => { setTimeout(() => { synthRef.current?.play(m); setTimeout(() => synthRef.current?.stop(m), 1000); }, i * 500); });
+    scheduleNotePlayback(notes);
   };
 
   const confirmTraining = () => { if (currentAttempt.size === 0) return; setShowResults(true); };
@@ -280,7 +318,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); };
-  }, [isActive, transpose, isSmartChord, isSustain, isDecayMode, quizActive, trainingActive, mouseSelection, activeKeys]);
+  }, [isActive, transpose, isSmartChord, isSustain, isDecayMode, quizActive, trainingActive, mouseSelection, activeKeys, scaleLockOn, scaleRoot, scaleType]);
 
   const activeMidiMap = useMemo(() => {
     const map = new Set(keyboardMidis);
@@ -343,7 +381,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
           <h2 className="text-2xl sm:text-3xl font-extrabold gradient-text flex items-center justify-center gap-2 mb-1">
             <Music size={24} /> 鍵盤控制器
           </h2>
-          <p className="text-tx-muted text-xs sm:text-sm">Z排下音域（黑鍵 S D G H J K L）| Q排上音域（黑鍵 2 3 5 6 7 8 9）| 空白鍵重置</p>
+          <p className="text-tx-muted text-xs sm:text-sm">Z排下音域（黑鍵 S D G H J L ;）| Q排上音域（黑鍵 2 3 5 6 7 8 9）| 空白鍵重置</p>
         </div>
 
         {/* Control Strip */}
@@ -360,7 +398,8 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
           {[
             { id: 'decay', icon: Hourglass, label: '衰減', active: isDecayMode, action: () => setIsDecayMode(!isDecayMode), color: 'cyan' },
             { id: 'sustain', icon: Infinity, label: '延音', active: isSustain, action: () => setIsSustain(!isSustain), color: 'orange' },
-            { id: 'chords', icon: Zap, label: '和弦', active: isSmartChord, action: () => setIsSmartChord(!isSmartChord), color: 'warm' }
+            { id: 'chords', icon: Zap, label: '和弦', active: isSmartChord, action: () => setIsSmartChord(!isSmartChord), color: 'warm' },
+            { id: 'scalelock', icon: Lock, label: '音階鎖', active: scaleLockOn, action: () => setScaleLockOn(!scaleLockOn), color: 'warm' }
           ].map(btn => (
             <button
               key={btn.id} onClick={btn.action}
@@ -377,6 +416,36 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
             <span className="text-[8px] sm:text-[10px] font-bold">重置</span>
           </button>
         </div>
+
+        {/* Scale-lock selector — only when 音階鎖 is active */}
+        {scaleLockOn && (
+          <div className="w-full card p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-in">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="label mr-1">根音</span>
+              {NOTE_STRINGS.map((n, i) => (
+                <button
+                  key={n}
+                  onClick={() => setScaleRoot(i)}
+                  className="px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                  style={scaleRoot === i
+                    ? { background: 'var(--primary-bg)', border: '1px solid var(--primary)', color: 'var(--primary-sub)' }
+                    : { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' }}
+                >{n}</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 sm:ml-auto">
+              <span className="label">音階</span>
+              <select
+                value={scaleType}
+                onChange={(e) => setScaleType(e.target.value as ScaleType)}
+                className="px-2 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer"
+                style={{ background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-sub)' }}
+              >
+                {Object.values(ScaleType).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* Piano Keyboard */}
         <div ref={pianoScrollRef} className="w-full overflow-x-auto pb-4 sm:pb-8 flex justify-start sm:justify-center no-scrollbar touch-pan-x">
@@ -401,11 +470,11 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                 return (
                   <div
                     key={k.offset}
-                    onPointerDown={(e) => { e.preventDefault(); handleNoteStart(k.offset.toString(), k.offset, k.chordType, false); }}
+                    onPointerDown={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); handleNoteStart(k.offset.toString(), k.offset, k.chordType, false); }}
                     onPointerUp={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, k.chordType, false); }}
-                    onPointerLeave={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, k.chordType, false); }}
-                    className="relative rounded-b-lg sm:rounded-b-xl shrink-0 flex flex-col justify-end items-center pb-3 sm:pb-5 transition-all duration-75 select-none cursor-pointer"
-                    style={{ width: whiteKeyWidth, height: KEYBOARD_HEIGHT, borderLeft: '1px solid var(--bd)', borderRight: '1px solid var(--bd)', ...displayStyle }}
+                    onPointerCancel={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, k.chordType, false); }}
+                    className={`relative rounded-b-lg sm:rounded-b-xl shrink-0 flex flex-col justify-end items-center pb-3 sm:pb-5 transition-all duration-75 select-none ${isLockedOut(k.offset) ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                    style={{ width: whiteKeyWidth, height: KEYBOARD_HEIGHT, borderLeft: '1px solid var(--bd)', borderRight: '1px solid var(--bd)', ...displayStyle, opacity: isLockedOut(k.offset) ? 0.3 : 1 }}
                   >
                     <span className="font-bold text-[9px] sm:text-xs pointer-events-none" style={{ color: textColor }}>{getNoteLabel(k.offset)}</span>
                     <span className="text-[7px] sm:text-[9px] font-semibold pointer-events-none mt-0.5 opacity-30 hidden xs:block" style={{ color: textColor }}>{k.label}</span>
@@ -433,11 +502,11 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
               return (
                 <div
                   key={k.offset}
-                  onPointerDown={(e) => { e.preventDefault(); handleNoteStart(k.offset.toString(), k.offset, undefined, false); }}
+                  onPointerDown={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); handleNoteStart(k.offset.toString(), k.offset, undefined, false); }}
                   onPointerUp={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, undefined, false); }}
-                  onPointerLeave={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, undefined, false); }}
-                  className="absolute top-0 rounded-b-md sm:rounded-b-lg flex flex-col justify-end items-center pb-2 sm:pb-3 transition-all duration-75 z-20 cursor-pointer shadow-lg select-none"
-                  style={{ left: leftOffset, width: blackKeyWidth, height: KEYBOARD_HEIGHT * 0.6, ...displayStyle }}
+                  onPointerCancel={(e) => { e.preventDefault(); handleNoteStop(k.offset.toString(), k.offset, undefined, false); }}
+                  className={`absolute top-0 rounded-b-md sm:rounded-b-lg flex flex-col justify-end items-center pb-2 sm:pb-3 transition-all duration-75 z-20 shadow-lg select-none ${isLockedOut(k.offset) ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  style={{ left: leftOffset, width: blackKeyWidth, height: KEYBOARD_HEIGHT * 0.6, ...displayStyle, opacity: isLockedOut(k.offset) ? 0.3 : 1 }}
                 >
                   <span className="text-[8px] sm:text-[10px] font-bold text-white/80 pointer-events-none">{getNoteLabel(k.offset)}</span>
                   <span className="text-[6px] sm:text-[7px] font-semibold pointer-events-none mt-0.5 hidden xs:block" style={{ color: 'rgba(255,255,255,0.3)' }}>{k.label}</span>
@@ -485,7 +554,7 @@ const Keyboard: React.FC<KeyboardProps> = ({ isActive, volume }) => {
                     )}
                   </div>
                   <div className="grid grid-cols-1 gap-1.5">
-                    <button onClick={() => targetMidiNotes.forEach((m,i)=>setTimeout(()=>synthRef.current?.play(m),i*500))} className="btn-ghost w-full py-2 text-[11px] flex items-center justify-center gap-2"><RotateCcw size={11} /> 再次播放</button>
+                    <button onClick={() => scheduleNotePlayback(targetMidiNotes)} className="btn-ghost w-full py-2 text-[11px] flex items-center justify-center gap-2"><RotateCcw size={11} /> 再次播放</button>
                     <button onClick={() => setMouseSelection(new Set())} className="btn-ghost w-full py-2 text-[11px] flex items-center justify-center gap-2"><Trash2 size={11} /> 清除</button>
                     <button disabled={currentAttempt.size < numNotesToPlay || showResults} onClick={confirmTraining} className="w-full py-2.5 rounded-xl font-bold text-[11px] flex items-center justify-center gap-2 cursor-pointer transition-all" style={currentAttempt.size < numNotesToPlay || showResults ? { background: 'var(--input-bg)', border: '1px solid var(--bd)', color: 'var(--tx-muted)' } : { background: 'linear-gradient(90deg, var(--status-success), var(--primary))', color: 'white', boxShadow: '0 4px 12px var(--status-success-bg-strong)' }}><CheckCircle2 size={13} /> 確定選擇</button>
                   </div>

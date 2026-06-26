@@ -6,6 +6,7 @@ interface ActiveNote {
   osc: OscillatorNode;
   gain: GainNode;
   isStopped: boolean;
+  safetyTimerId: number;
 }
 
 export class PolySynth {
@@ -55,17 +56,17 @@ export class PolySynth {
 
     osc.start(now);
 
-    const noteObj: ActiveNote = { osc, gain, isStopped: false };
+    const noteObj: ActiveNote = { osc, gain, isStopped: false, safetyTimerId: 0 };
     this.activeNotes.set(midi, noteObj);
 
-    // Safety timeout: prevent memory leak if caller never invokes stop()
-    if (this.decayMode) {
-      setTimeout(() => {
-        if (this.activeNotes.get(midi) === noteObj) {
-          this.stop(midi, true);
-        }
-      }, 5000);
-    }
+    // Safety timeout: prevent memory leak if caller never invokes stop().
+    // decay 模式音量很快衰減，5 秒即可回收；sustain 模式給較長保護避免誤切。
+    const safetyMs = this.decayMode ? 5000 : 10000;
+    noteObj.safetyTimerId = window.setTimeout(() => {
+      if (this.activeNotes.get(midi) === noteObj) {
+        this.stop(midi, true);
+      }
+    }, safetyMs);
   }
 
   public stop(midi: number, immediate: boolean = false) {
@@ -74,6 +75,7 @@ export class PolySynth {
     const { osc, gain } = active;
     const now = this.ctx.currentTime;
     active.isStopped = true;
+    clearTimeout(active.safetyTimerId);
 
     try {
       gain.gain.cancelScheduledValues(now);

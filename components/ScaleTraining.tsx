@@ -176,7 +176,7 @@ const ScaleTraining: React.FC<Props> = ({ onBack }) => {
                 const isWrong = feedback === 'incorrect' && selected === opt;
                 const state = isCorrect ? 'correct' : isWrong ? 'wrong' : feedback ? 'dimmed' : 'idle';
                 return (
-                  <button key={opt} disabled={!!feedback} onClick={() => handleAnswer(opt)}
+                  <button key={opt} disabled={!!feedback} aria-pressed={selected === opt} onClick={() => handleAnswer(opt)}
                     className="h-14 rounded-xl font-bold text-xs tracking-wider transition-all cursor-pointer px-3"
                     style={optionStyle(state)}>
                     {opt}

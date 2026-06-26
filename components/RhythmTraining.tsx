@@ -780,7 +780,8 @@ const RhythmTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
         {rhythmMode === 'tap' && phase === 'recording' && (
           <button
             onPointerDown={handleTap}
-            className="btn-gradient w-40 h-40 rounded-full flex flex-col items-center justify-center active:scale-90 transition-all select-none"
+            aria-label="敲擊節奏"
+            className="btn-gradient w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center active:scale-90 transition-all select-none"
             style={{ boxShadow: '0 8px 32px var(--primary-shadow)' }}
           >
             <Disc size={40} className="text-white mb-1" />

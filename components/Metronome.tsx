@@ -229,7 +229,7 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
   useEffect(() => {
     engineRef.current = new MetronomeEngine((step) => setCurrentStepIndex(step));
     engineRef.current.setVolume(volume);
-    return () => engineRef.current?.stop();
+    return () => engineRef.current?.destroy();
   }, []);
 
   useEffect(() => { if (engineRef.current) engineRef.current.setVolume(volume); }, [volume]);
@@ -380,7 +380,7 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
   const getIntensityColor = (level: BeatIntensity) => {
     switch(level) {
       case BeatIntensity.STRONG: return { dot: 'var(--status-success)', rgb: '16,185,129' };
-      case BeatIntensity.WEAK: return { dot: 'var(--primary-sub)', rgb: '167,139,250' };
+      case BeatIntensity.WEAK: return { dot: 'var(--primary-sub)', rgb: '212,168,126' };
       case BeatIntensity.POLY_A: return { dot: '#0ea5e9', rgb: '14,165,233' };
       case BeatIntensity.POLY_B: return { dot: 'var(--status-warning)', rgb: '245,158,11' };
       case BeatIntensity.POLY_BOTH: return { dot: '#e879f9', rgb: '232,121,249' };
@@ -481,6 +481,32 @@ const Metronome: React.FC<MetronomeProps> = ({ volume, setVolume }) => {
               </button>
             </div>
           </div>
+
+          {/* Visual metronome — pulses in sync with the current beat */}
+          {(() => {
+            const playing = isPlaying && currentStepIndex >= 0;
+            const intensity = playing ? grid[currentStepIndex] : BeatIntensity.MUTE;
+            const isStrong = intensity === BeatIntensity.STRONG || intensity === BeatIntensity.POLY_BOTH;
+            const muted = intensity === BeatIntensity.MUTE;
+            const c = getIntensityColor(playing && !muted ? intensity : BeatIntensity.WEAK);
+            const pulseScale = isStrong ? 1.35 : muted ? 1.06 : 1.18;
+            return (
+              <div className="flex justify-center py-1" aria-hidden="true">
+                <div
+                  key={`${currentStepIndex}-${isPlaying}`}
+                  className={`rounded-full ${playing && !muted ? 'animate-metronome-pulse' : ''}`}
+                  style={{
+                    width: 56, height: 56,
+                    ['--pulse-scale' as string]: pulseScale,
+                    background: playing && !muted ? `rgba(${c.rgb},0.18)` : 'var(--input-bg)',
+                    border: `2px solid ${playing && !muted ? `rgba(${c.rgb},0.7)` : 'var(--bd)'}`,
+                    boxShadow: playing && !muted ? `0 0 18px rgba(${c.rgb},0.45)` : 'none',
+                    transition: 'background 80ms, border-color 80ms',
+                  }}
+                />
+              </div>
+            );
+          })()}
 
           {/* BPM slider */}
           <div className="flex items-center gap-2">

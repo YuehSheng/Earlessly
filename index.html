@@ -237,6 +237,15 @@
       }
       .animate-drum-step { animation: drum-step-flash 180ms ease-out; }
 
+      /* Visual metronome: single-shot pop on each beat. Strength comes from a
+         CSS variable --pulse-scale set inline per beat (strong vs weak). */
+      @keyframes metronome-pulse {
+        0%   { transform: scale(1); }
+        18%  { transform: scale(var(--pulse-scale, 1.18)); }
+        100% { transform: scale(1); }
+      }
+      .animate-metronome-pulse { animation: metronome-pulse 0.22s ease-out; }
+
       /* ===== BASE ===== */
       * { box-sizing: border-box; }
 
