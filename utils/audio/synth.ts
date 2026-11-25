@@ -41,10 +41,16 @@ export class PolySynth {
     gain.connect(this.masterGain);
 
     const now = this.ctx.currentTime;
-    const pivot = 60;
-    const sensitivity = 0.012;
-    let noteGain = 0.3 * (1 - (midi - pivot) * sensitivity);
-    noteGain = Math.max(0.1, Math.min(0.6, noteGain));
+    // Perceptual loudness compensation. Low notes need more amplitude than high
+    // notes to sound equally loud (equal-loudness contours), and the keyboard's
+    // default range sits at/above MIDI 60, so the old pivot of 60 barely boosted
+    // the low end. Centre the curve mid-range and roll ~3.5 dB/octave: quieter
+    // going up, louder going down, clamped so very low notes don't clip.
+    const pivot = 72; // ~C5, middle of the usable range
+    const dbPerOctave = 3.5;
+    const db = ((pivot - midi) / 12) * dbPerOctave;
+    let noteGain = 0.27 * Math.pow(10, db / 20);
+    noteGain = Math.max(0.12, Math.min(0.6, noteGain));
 
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(noteGain, now + 0.02);
