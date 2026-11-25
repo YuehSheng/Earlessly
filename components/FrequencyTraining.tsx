@@ -470,6 +470,8 @@ const FrequencyTraining: React.FC<Props> = ({ onBack, volume = 0.5 }) => {
             ballooning on ultrawides. */}
         <svg
           ref={svgRef}
+          role="img"
+          aria-label="參數式 EQ 頻率響應圖。拖曳節點調整各頻段的增益，使曲線配對目標 EQ 曲線。"
           viewBox={`0 0 ${SW} ${SH}`}
           preserveAspectRatio="xMidYMid meet"
           className="w-full block"

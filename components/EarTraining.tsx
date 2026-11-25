@@ -63,20 +63,33 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
   const [micError, setMicError] = useState<MicPermissionReason | null>(null);
 
   const autoAdvanceTimer = useRef<number | null>(null);
+  const replayTimer = useRef<number | null>(null);
   const audioLoopRef = useRef<number | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const bufferRef = useRef<Float32Array | null>(null);
   const isListeningRef = useRef(false);
 
+  // 統一清除所有自動前進 / 答錯重播 timer，避免切換模式或卸載後在背景觸發。
+  const clearPendingTimers = () => {
+    if (autoAdvanceTimer.current) { clearTimeout(autoAdvanceTimer.current); autoAdvanceTimer.current = null; }
+    if (replayTimer.current) { clearTimeout(replayTimer.current); replayTimer.current = null; }
+  };
+
+  // 排程答錯後的重播，先清除前一個避免堆疊。
+  const scheduleReplay = (notes: number[], speed: number) => {
+    if (replayTimer.current) clearTimeout(replayTimer.current);
+    replayTimer.current = window.setTimeout(() => playNotes(notes, speed), 400);
+  };
+
   useEffect(() => {
-    return () => { stopListening(); if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current); };
+    return () => { stopListening(); clearPendingTimers(); };
   }, []);
 
   // Clean up audio when gameMode changes in settings
   useEffect(() => {
     if (mode === 'settings') {
-      if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
+      clearPendingTimers();
       stopListening();
     }
   }, [gameMode]);
@@ -101,7 +114,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
 
   const nextQuestion = () => {
     setFeedback(null); setUserSelection([]); setVocalHoldProgress(0); setCurrentCentsOff(null); setMicVolume(0); setMicError(null); stopListening();
-    if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
+    clearPendingTimers();
     // Only classic ear-training modes route through this builder; delegated
     // modes (frequency/rhythm/etc.) own their own question generation.
     const classicMode: ClassicEarTrainingMode = CLASSIC_MODES.has(gameMode)
@@ -177,13 +190,13 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
         const isCorrect = currentQuestion.answerNames.includes(answer);
         setUserSelection([answer]);
         if (isCorrect) { setFeedback('correct'); setScore(s => ({ correct: s.correct + 1, total: s.total + 1 })); autoAdvanceTimer.current = window.setTimeout(() => nextQuestion(), 1000); }
-        else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); setTimeout(() => playNotes(currentQuestion.notes, playbackSpeed), 400); }
+        else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); scheduleReplay(currentQuestion.notes, playbackSpeed); }
       } else setUserSelection(prev => prev.includes(answer) ? prev.filter(a => a !== answer) : (prev.length < polyphony ? [...prev, answer] : prev));
     } else {
       const isCorrect = currentQuestion.answerNames.includes(answer);
       setUserSelection([answer]);
       if (isCorrect) { setFeedback('correct'); setScore(s => ({ correct: s.correct + 1, total: s.total + 1 })); autoAdvanceTimer.current = window.setTimeout(() => nextQuestion(), 1500); }
-      else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); setTimeout(() => playNotes(currentQuestion.notes, playbackSpeed), 400); }
+      else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); scheduleReplay(currentQuestion.notes, playbackSpeed); }
     }
   };
 
@@ -192,7 +205,7 @@ const EarTraining: React.FC<EarTrainingProps> = ({ volume = 0.5 }) => {
     const correct = currentQuestion.answerNames;
     const isCorrect = userSelection.length === correct.length && userSelection.every(val => correct.includes(val));
     if (isCorrect) { setFeedback('correct'); setScore(s => ({ correct: s.correct + 1, total: s.total + 1 })); autoAdvanceTimer.current = window.setTimeout(() => nextQuestion(), 1500); }
-    else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); setTimeout(() => playNotes(currentQuestion.notes, playbackSpeed), 400); }
+    else { setFeedback('incorrect'); setScore(s => ({ ...s, total: s.total + 1 })); scheduleReplay(currentQuestion.notes, playbackSpeed); }
   };
 
   // ========== SETTINGS PAGE ==========

@@ -25,22 +25,34 @@ const App: React.FC = () => {
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const navRef = useRef<HTMLElement | null>(null);
 
-  useLayoutEffect(() => {
+  const measureIndicator = () => {
     const btn = tabRefs.current[activeTab];
-    if (btn) {
+    if (btn && btn.offsetWidth > 0) {
       setIndicatorStyle({ left: btn.offsetLeft, width: btn.offsetWidth });
     }
+  };
+
+  useLayoutEffect(() => {
+    measureIndicator();
   }, [activeTab]);
 
-  // Re-measure on resize so the pill indicator tracks layout changes.
+  // The Tailwind CDN applies utility styles asynchronously, so the very first
+  // measurement can land before the nav has its final layout (giving a stunted
+  // pill stuck on the first tab). Re-measure whenever the nav resizes and once
+  // fonts settle so the indicator always tracks the active tab.
   useEffect(() => {
-    const onResize = () => {
-      const btn = tabRefs.current[activeTab];
-      if (btn) setIndicatorStyle({ left: btn.offsetLeft, width: btn.offsetWidth });
+    const nav = navRef.current;
+    if (!nav) return;
+    const ro = new ResizeObserver(() => measureIndicator());
+    ro.observe(nav);
+    if (document.fonts?.ready) document.fonts.ready.then(() => measureIndicator());
+    window.addEventListener('resize', measureIndicator);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measureIndicator);
     };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
   }, [activeTab]);
 
   const handleTabChange = (tab: Tab) => {
@@ -61,7 +73,7 @@ const App: React.FC = () => {
             <span className="font-extrabold text-sm sm:text-base tracking-tight hidden xs:block">耳孔無有力</span>
           </div>
 
-          <nav role="tablist" className="relative flex p-1 rounded-xl mx-2" style={{ background: 'var(--input-bg)' }}>
+          <nav ref={navRef} role="tablist" className="relative flex p-1 rounded-xl mx-2" style={{ background: 'var(--input-bg)' }}>
             <div
               className="absolute top-1 bottom-1 rounded-lg transition-all duration-300 ease-out"
               style={{

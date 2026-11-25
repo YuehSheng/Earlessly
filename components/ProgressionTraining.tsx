@@ -160,6 +160,7 @@ const ProgressionTraining: React.FC<Props> = ({ onBack }) => {
                   <button
                     key={opt.id}
                     disabled={!!feedback}
+                    aria-pressed={selected === opt.id}
                     onClick={() => handleAnswer(opt)}
                     className="py-4 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer"
                     style={optionStyle(state)}
@@ -170,6 +171,25 @@ const ProgressionTraining: React.FC<Props> = ({ onBack }) => {
                 );
               })}
             </OptionsGrid>
+          )}
+
+          {feedback && (
+            <div className="mb-5 card p-3">
+              <div className="label mb-2">和弦進行解析（{rootName} 調）</div>
+              <div className="flex gap-1.5 flex-wrap justify-center">
+                {question.prog.degrees.map((chord, ci) => (
+                  <div key={ci} className="px-2.5 py-1.5 rounded-lg text-center"
+                    style={{ background: 'var(--primary-bg)', border: '1px solid rgba(200,149,108,0.2)' }}>
+                    <div className="text-xs font-bold" style={{ color: 'var(--primary-sub)' }}>
+                      {question.prog.romanNumerals[ci]}
+                    </div>
+                    <div className="text-[10px] opacity-70" style={{ color: 'var(--primary-sub)' }}>
+                      {chord.map(d => NOTE_STRINGS[noteIndex(question.rootMidi + d)]).join(' ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {feedback && (

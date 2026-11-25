@@ -13,6 +13,9 @@ export class MetronomeEngine {
   private bpm: number = 120;
   private grid: BeatIntensity[] = [];
   private onStep: (step: number) => void;
+  // 追蹤每個 UI 回調的 draw timeout，stop()/destroy() 時清除，避免卸載後仍呼叫 onStep。
+  private drawTimers: Set<number> = new Set();
+  private destroyed: boolean = false;
   public stepInterval: number = 0.5;
   private masterGain: GainNode;
   // Swing in [0, 0.5]. Lengthens even step intervals by (1+swing), shortens
@@ -46,7 +49,7 @@ export class MetronomeEngine {
   }
 
   public start() {
-    if (this.isPlaying) return;
+    if (this.isPlaying || this.destroyed) return;
     resumeAudio();
     this.isPlaying = true;
     this.currentStep = 0;
@@ -60,6 +63,15 @@ export class MetronomeEngine {
       window.clearTimeout(this.timerID);
       this.timerID = undefined;
     }
+    this.drawTimers.forEach(id => window.clearTimeout(id));
+    this.drawTimers.clear();
+  }
+
+  // 釋放音訊資源：停止排程並中斷 master gain 連線（與 DrumMachineEngine.destroy 對齊）。
+  public destroy() {
+    this.stop();
+    this.destroyed = true;
+    try { this.masterGain.disconnect(); } catch { /* already disconnected */ }
   }
 
   private scheduler() {
@@ -93,9 +105,11 @@ export class MetronomeEngine {
     const schedTime = Math.max(now, time);
     const drawTime = (schedTime - now) * 1000;
 
-    setTimeout(() => {
+    const drawId = window.setTimeout(() => {
+      this.drawTimers.delete(drawId);
       if (this.isPlaying) this.onStep(beatNumber);
     }, Math.max(0, drawTime));
+    this.drawTimers.add(drawId);
 
     const intensity = this.grid[beatNumber];
     if (intensity === BeatIntensity.MUTE || !this.isPlaying) return;
